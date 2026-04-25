@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Strategist Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css?v=3.4">
+</head>
+<body>
+    <!-- Landing Page: Portfolio Selection -->
+    <div id="landing-page" class="page landing-page">
+        <div class="landing-shell">
+            <section class="landing-hero glass-panel">
+                <div class="landing-copy">
+                    <span class="landing-eyebrow">Portfolio Control Center</span>
+                    <h1>Investment Strategist</h1>
+                    <p class="subtitle">Select an existing portfolio or upload a new Excel template to create one instantly.</p>
+                </div>
+
+                <div class="upload-card glass-card" id="uploadDropZone">
+                    <div class="upload-card__icon" aria-hidden="true">⇪</div>
+                    <div class="upload-card__body">
+                        <h2>Upload Portfolio</h2>
+                        <p>Drop your Excel file here or choose a file to import holdings, cash, and portfolio metadata.</p>
+                    </div>
+                    <div class="upload-card__actions">
+                        <label id="uploadPortfolioButton" class="upload-btn" for="portfolioUpload" role="button" tabindex="0">Choose File</label>
+                        <input id="portfolioUpload" class="file-input" type="file" accept=".xlsx,.xls">
+                    </div>
+                    <div id="uploadProgress" class="upload-progress hidden" aria-live="polite">
+                        <span class="upload-spinner" aria-hidden="true"></span>
+                        <span class="upload-progress__text">Uploading portfolio...</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="portfolio-section glass-panel">
+                <div class="section-header">
+                                    <div>
+                                        <span class="section-label">Available portfolios</span>
+                                        <h2>Select a portfolio to view</h2>
+                                    </div>
+                                </div>
+
+                <div class="portfolio-list portfolio-grid" id="portfolioList">
+                    <p class="loading">Loading portfolios...</p>
+                </div>
+            </section>
+        </div>
+
+        <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboard-page" class="page hidden">
+        <!-- Top Header -->
+    <header class="header">
+        <div class="header-left">
+            <button id="backButton" class="back-btn">← Back</button>
+        </div>
+
+        <div class="portfolio-header-center">
+            <div class="portfolio-name">
+                <h1 id="portfolioTitle">4RCH3R</h1>
+            </div>
+            <div class="header-sub-labels">
+                <span class="label-invested">Invested: <strong id="investedAmount">$0.00</strong></span>
+                <span class="label-cash">Cash: <strong id="cashAmount">$0.00</strong></span>
+            </div>
+        </div>
+
+        <div class="total-balance-header">
+            <span class="label">Total Balance</span>
+            <span class="value" id="totalBalance">$0.00</span>
+        </div>
+    </header>
+
+        <!-- Main Grid Layout -->
+        <div class="main-grid">
+            <!-- Summary Cards -->
+            <section class="summary-cards">
+                <div class="card">
+                    <h3>Total Profit</h3>
+                    <p class="profit" id="totalProfit">+$0.00</p>
+                </div>
+                <div class="card">
+                    <h3>Daily Change</h3>
+                    <p class="change" id="dailyChange">0.00%</p>
+                </div>
+                <div class="card">
+                    <h3>Highest Growth</h3>
+                    <p class="growth" id="highestGrowth">--</p>
+                </div>
+            </section>
+
+            <!-- Holdings Table -->
+            <section class="holdings-section">
+                <h2>Holdings</h2>
+                <div class="holdings-table-container">
+                    <table class="holdings-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Shares</th>
+                                <th>Price</th>
+                                <th>Value</th>
+                                <th>Day %</th>
+                                <th>Total PnL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="holdingsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- AI Strategist Panel -->
+            <aside class="ai-strategist">
+                <h2>AI Strategist</h2>
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message bot">
+                            <p>Hello! I'm your AI investment strategist. Ask me about your portfolio or market insights.</p>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatInput" placeholder="Ask the AI strategist...">
+                        <button id="sendButton">Send</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <footer class="status-bar">
+            <div class="status-item">
+                <span class="status-label">MongoDB:</span>
+                <span class="status-value" id="mongoStatus">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Ollama:</span>
+                <span class="status-value" id="ollamaStatus">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Portfolio:</span>
+                <span class="status-value" id="currentPortfolio">--</span>
+            </div>
+        </footer>
+    </div>
+
+        <!-- Main application logic -->
+        <script src="/static/app.js?v=3.5"></script>
+</body>
+</html>
+
+
