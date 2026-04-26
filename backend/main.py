@@ -35,7 +35,7 @@ def on_shutdown():
         from database import close_connection
         close_connection()
     except Exception as e:
-        print(f"⚠️  Error during shutdown cleanup: {e}")
+        print(f"[ERROR] Error during shutdown cleanup: {e}")
 
 
 @app.get("/status", response_model=dict, include_in_schema=True)
@@ -62,7 +62,7 @@ if not static_dir.exists():
     static_dir = Path.cwd() / "frontend" / "public"
     
 # This line tells FastAPI where to find your files
-app.mount("/static", StaticFiles(directory="frontend/public/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="static")
 
 
 @app.get("/", include_in_schema=False)
@@ -72,6 +72,13 @@ async def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Timeout configuration for long-running AI requests (5 minutes)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        timeout_keep_alive=300,  # Keep connections alive for 5 minutes
+        log_level="info"
+    )
 
     

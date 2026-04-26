@@ -23,12 +23,12 @@ try:
 
     # Test the connection
     client.admin.command('ismaster')
-    print("✅ MongoDB connection established")
+    print("[OK] MongoDB connection established")
 except errors.OperationFailure as e:
-    print(f"⚠️  MongoDB authentication failed: {e}")
+    print(f"[WARN] MongoDB authentication failed: {e}")
     print("   Continuing without database — some features will be disabled")
 except Exception as e:
-    print(f"⚠️  MongoDB connection failed: {e}")
+    print(f"[WARN] MongoDB connection failed: {e}")
     print("   Continuing without database — some features will be disabled")
 
 if client is not None:
@@ -42,7 +42,7 @@ def close_connection():
     global client
     if client is not None:
         client.close()
-        print("✅ MongoDB connection closed")
+        print("[OK] MongoDB connection closed")
         client = None
 
 def get_collection(name):

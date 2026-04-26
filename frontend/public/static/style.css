@@ -393,27 +393,65 @@ tr:hover {
 /* ============================================
    Action Buttons (in holdings table)
    ============================================ */
-.btn-edit, .btn-delete {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 1rem;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background 0.2s;
-}
+ .btn-edit, .btn-delete {
+     background: none;
+     border: none;
+     cursor: pointer;
+     font-size: 0.875rem;
+     padding: 6px 10px;
+     border-radius: 6px;
+     transition: all 0.15s ease;
+     display: inline-flex;
+     align-items: center;
+     gap: 6px;
+     font-weight: 500;
+     min-width: 64px;
+     justify-content: center;
+     margin-right: 8px;
+ }
 
-.btn-edit:hover {
-    background: rgba(59, 130, 246, 0.15);
-    color: var(--ai-blue);
-}
+ .btn-edit {
+     color: var(--ai-blue);
+     background: rgba(59, 130, 246, 0.08);
+     border: 1px solid rgba(59, 130, 246, 0.2);
+ }
 
-.btn-delete:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--danger-red);
-}
+ .btn-edit:hover {
+     background: rgba(59, 130, 246, 0.18);
+     border-color: var(--ai-blue);
+     transform: translateY(-1px);
+     box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15);
+ }
 
-/* Add Stock button */
+ .btn-edit:active {
+     transform: translateY(0);
+ }
+
+ .btn-delete {
+     color: var(--danger-red);
+     background: rgba(239, 68, 68, 0.08);
+     border: 1px solid rgba(239, 68, 68, 0.2);
+ }
+
+ .btn-delete:hover {
+     background: rgba(239, 68, 68, 0.18);
+     border-color: var(--danger-red);
+     transform: translateY(-1px);
+     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
+ }
+
+ .btn-delete:active {
+     transform: translateY(0);
+ }
+
+ /* Button icon alignment */
+ .btn-edit svg, .btn-delete svg {
+     width: 14px;
+     height: 14px;
+     flex-shrink: 0;
+ }
+
+ /* Add Stock button */
 .btn-primary {
     background: var(--ai-blue);
     color: white;
@@ -428,9 +466,27 @@ tr:hover {
 
 .btn-primary:hover {
     background: #2563eb;
-}
+ }
 
-/* Cash operation buttons */
+ /* Cancel button (secondary action in modals) matches delete button style */
+ .btn-cancel {
+     color: var(--danger-red);
+     background: rgba(239, 68, 68, 0.08);
+     border: 1px solid rgba(239, 68, 68, 0.2);
+     padding: 8px 16px;
+     border-radius: 6px;
+     cursor: pointer;
+     font-size: 0.875rem;
+     font-weight: 500;
+     transition: all 0.15s ease;
+ }
+
+ .btn-cancel:hover {
+     background: rgba(239, 68, 68, 0.18);
+     border-color: var(--danger-red);
+     transform: translateY(-1px);
+     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
+ }
 .btn-cash {
     background: var(--success-green);
     color: white;

@@ -20,16 +20,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const investedAmountEl = document.getElementById("investedAmount");
   const cashAmountEl = document.getElementById("cashAmount");
 
-  const chatInput = document.getElementById("chatInput");
-  const sendButton = document.getElementById("sendButton");
-  const chatMessages = document.getElementById("chatMessages");
-  const uploadPortfolioButton = document.getElementById("uploadPortfolioButton");
-  const portfolioUpload = document.getElementById("portfolioUpload");
-  const uploadDropZone = document.getElementById("uploadDropZone");
-  const uploadProgress = document.getElementById("uploadProgress");
-  const toastContainer = document.getElementById("toastContainer");
+   const chatInput = document.getElementById("chatInput");
+   const sendButton = document.getElementById("sendButton");
+   const chatMessages = document.getElementById("chatMessages");
+   const uploadPortfolioButton = document.getElementById("uploadPortfolioButton");
+   const portfolioUpload = document.getElementById("portfolioUpload");
+   const uploadDropZone = document.getElementById("uploadDropZone");
+   const uploadProgress = document.getElementById("uploadProgress");
+    const toastContainer = document.getElementById("toastContainer");
+    const webSearchToggle = document.getElementById("webSearchToggle");
 
-  let currentPortfolioId = null;
+    // Cash modal elements
+    const cashModal = document.getElementById("cashModal");
+    const cashModalTitle = document.getElementById("cashModalTitle");
+    const cashForm = document.getElementById("cashForm");
+    const cashAmountInput = document.getElementById("cashAmountInput");
+    const cashCancelBtn = document.getElementById("cashCancelBtn");
+    const cashSubmitBtn = document.getElementById("cashSubmitBtn");
+
+    let currentPortfolioId = null;
 
   /****************************************************************************
    * SECTION 2: UTILITY FUNCTIONS                                             *
@@ -186,7 +195,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (holdingsBody) {
           holdingsBody.innerHTML = "";
 
-          (data.positions || []).forEach((stock) => {
+          // Sort positions: top performers (highest daily % gain) first
+          const sortedPositions = (data.positions || []).sort((a, b) => {
+            const changeA = Number(a.daily_change || 0);
+            const changeB = Number(b.daily_change || 0);
+            return changeB - changeA;  // Descending: highest gain first
+          });
+
+          sortedPositions.forEach((stock) => {
             const dayChangePct = Number(stock.daily_change || 0);
             const currentPrice = Number(stock.current_price || 0);
             const averageCost = Number(stock.average_cost || 0);
@@ -211,10 +227,24 @@ document.addEventListener("DOMContentLoaded", () => {
                <td class="py-3 px-4 ${totalPnL >= 0 ? "success" : "negative"}">
                  ${formatCurrency(totalPnL)}
                </td>
-               <td class="py-3 px-4">
-                 <button class="btn-edit" data-ticker="${stock.ticker}">Edit</button>
-                 <button class="btn-delete" data-ticker="${stock.ticker}">Delete</button>
-               </td>
+                <td class="py-3 px-4">
+                  <button class="btn-edit" data-ticker="${stock.ticker}" title="Edit ${stock.ticker} position">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    Edit
+                  </button>
+                  <button class="btn-delete" data-ticker="${stock.ticker}" title="Delete ${stock.ticker} position">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                    Delete
+                  </button>
+                </td>
              `;
              holdingsBody.appendChild(row);
           });
@@ -328,19 +358,23 @@ document.addEventListener("DOMContentLoaded", () => {
     loadingDiv.innerHTML = `<p><em>AI is thinking...</em></p>`;
     chatMessages.appendChild(loadingDiv);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      const data = await response.json();
-      document.getElementById(loadingId)?.remove();
-      addChatMessage(data.response, false);
-    } catch (error) {
-      document.getElementById(loadingId)?.remove();
-      addChatMessage("Error: Connection failed.", false);
-    }
+     try {
+       const response = await fetch("/api/chat", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           message,
+           portfolio_id: currentPortfolioId || "",
+           use_web_search: webSearchToggle?.checked ?? true
+         }),
+       });
+       const data = await response.json();
+       document.getElementById(loadingId)?.remove();
+       addChatMessage(data.response, false);
+     } catch (error) {
+       document.getElementById(loadingId)?.remove();
+       addChatMessage("Error: Connection failed.", false);
+     }
   };
 
   sendButton?.addEventListener("click", handleSendMessage);
@@ -405,11 +439,18 @@ document.addEventListener("DOMContentLoaded", () => {
     cashForm?.reset();
   }
 
-  positionForm?.addEventListener("submit", async (e) => {
+   positionForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const ticker = tickerInput.value.trim().toUpperCase();
     const shares = parseFloat(sharesInput.value);
     const average_cost = parseFloat(costInput.value);
+
+    // Client-side ticker format validation (basic)
+    const tickerRegex = /^[A-Z0-9]{1,6}(\.[A-Z])?$/;
+    if (!tickerRegex.test(ticker)) {
+      showToast(`Invalid ticker format: '${ticker}'. Use 1-6 uppercase letters/digits.`, "error");
+      return;
+    }
 
     try {
       const response = await fetch(`/api/portfolios/${currentPortfolioId}/positions`, {
@@ -417,7 +458,13 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker, shares, average_cost }),
       });
-      if (!response.ok) throw new Error("Save failed");
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData.detail || `Save failed (${response.status})`;
+        throw new Error(msg);
+      }
+
       showToast("Saved successfully", "success");
       closePositionModal();
       loadSummary();

@@ -5,8 +5,16 @@ old_js
 __pycache__/
 backend/__pycache__/
 backend/models/__pycache__/
+test/smoke/__pycache__/
 *.py[cod]
 .dist
 .DS_Store
 .kilo
 server.log
+test_chat_fix.py
+test_chat_simple.py
+test_search_trigger.py
+test_validate_ticker.py
+verify_web_search.py
+diagnose_web_search.py
+.sixth

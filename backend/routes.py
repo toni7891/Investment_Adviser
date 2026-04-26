@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from io import BytesIO
 import httpx
 import json
+import time
 import pandas as pd
 import yfinance as yf
 import re
@@ -15,7 +16,15 @@ except ImportError:
 try:
     from .search import web_search_cached
 except ImportError:
-    from search import web_search_cached
+    try:
+        from search import web_search_cached
+    except ImportError as e:
+        # ddgs dependency missing — provide stub that logs error
+        print(f"[ERROR] Failed to import search module: {e}")
+        print("[ERROR] Install with: pip install ddgs>=9.14.0")
+        def web_search_cached(query: str, max_results: int = 5) -> str:
+            print(f"[WARN] Web search called but ddgs not installed")
+            return ""
 
 router = APIRouter()
 
@@ -89,8 +98,8 @@ def _format_portfolio_summary(portfolio_id: str, positions: list) -> str:
 
     # Build summary string
     summary = f"Portfolio '{portfolio_id}':\n"
-    summary += f"• Cash: ${cash_val:,.2f}\n"
-    summary += f"• Holdings ({len(holdings)} positions):\n"
+    summary += f"- Cash: ${cash_val:,.2f}\n"
+    summary += f"- Holdings ({len(holdings)} positions):\n"
 
     if holdings:
         for h in holdings:  # Show ALL positions (no limit)
@@ -193,14 +202,16 @@ When portfolio context is included:
 - Answer questions about specific tickers, costs, or potential
 
 When web search results are included:
-- Use the provided search results to give current (from april of 2026 or later), factual information
-- Cite sources (e.g., "According to recent reports...") when referencing web data
+- You MUST use the provided search results to give current (from April 2026 or later), factual information
+- DO NOT rely on your training data for time-sensitive information
+- Cite sources explicitly (e.g., "According to CNBC on April 24, 2026...") when referencing web data
+- If results are from different dates, prioritize the most recent
+- If results conflict, present multiple viewpoints and note the discrepancy
 - Acknowledge if information may be time-sensitive or unverified
-- Prioritize recent and authoritative results when multiple sources conflict
 
 When both are included:
 - Blend portfolio analysis with current market context from web results
-- Distinguish between personal portfolio facts and general market information
+- Distinguish clearly between personal portfolio facts and general market information
 - Provide recommendations grounded in both the user's specific holdings and current conditions
 
 When no context is available:
@@ -212,7 +223,9 @@ Keep responses concise, informative, and focused on the user's specific question
 
 async def call_ai_backend(user_message: str) -> dict:
     try:
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        print(f"[DEBUG] Calling AI backend at {AI_API_URL}")
+        # Increased to 300s (5 minutes) for slow reasoning models
+        async with httpx.AsyncClient(timeout=300.0, verify=False) as client:
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json"
@@ -226,14 +239,21 @@ async def call_ai_backend(user_message: str) -> dict:
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message}
                 ],
-                "max_tokens": 1024,
+                "max_tokens": 4096,  # Increased for detailed analysis (was 1024)
+                "stream": False,  # Explicitly disable streaming — we want complete response
             }
+            
+            print(f"[DEBUG] Sending payload: model={AI_MODEL}, message_len={len(user_message)}")
             
             response = await client.post(
                 AI_API_URL,
                 headers=headers,
                 json=payload
             )
+            
+            print(f"[DEBUG] Response status: {response.status_code}")
+            print(f"[DEBUG] Response headers: {dict(response.headers)}")
+            print(f"[DEBUG] Response text (first 500 chars): {response.text[:500]}")
             
             if response.status_code != 200:
                 error_text = response.text[:500] if response.text else "Unknown error"
@@ -242,7 +262,13 @@ async def call_ai_backend(user_message: str) -> dict:
                     detail=f"{AI_BACKEND_NAME} API error: {error_text}"
                 )
             
-            return response.json()
+            try:
+                result = response.json()
+                print(f"[DEBUG] Successfully parsed JSON, keys: {list(result.keys())}")
+                return result
+            except Exception as e:
+                print(f"[DEBUG] JSON parse failed: {e}")
+                raise HTTPException(status_code=502, detail=f"Invalid JSON from {AI_BACKEND_NAME}: {response.text[:200]}")
             
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail=f"Failed to connect to {AI_BACKEND_NAME} at {AI_API_URL}: {str(e)}")
@@ -269,6 +295,45 @@ async def upload_portfolio(file: UploadFile = File(...)):
         collection_name = _safe_collection_name(portfolio_name)
         portfolio_collection = db[collection_name]
         portfolio_collection.drop()
+
+        # Validate all stock tickers before inserting
+        if stock_documents:
+            tickers_to_validate = [doc["ticker"] for doc in stock_documents]
+            print(f"[UPLOAD] Validating tickers: {tickers_to_validate}")
+
+            # Batch validate using yfinance (efficient single call)
+            try:
+                validation_data = yf.download(tickers_to_validate, period="5d", progress=False)
+                valid_tickers = set()
+
+                if isinstance(validation_data.columns, pd.MultiIndex):
+                    # Multiple tickers returned
+                    for ticker in tickers_to_validate:
+                        try:
+                            ticker_df = validation_data[ticker]
+                            if not ticker_df.empty and not pd.isna(ticker_df["Close"].iloc[-1]):
+                                valid_tickers.add(ticker)
+                        except Exception:
+                            pass
+                else:
+                    # Single ticker
+                    ticker = tickers_to_validate[0]
+                    if not validation_data.empty and not pd.isna(validation_data["Close"].iloc[-1]):
+                        valid_tickers.add(ticker)
+
+                # Filter out invalid tickers
+                invalid_tickers = [doc for doc in stock_documents if doc["ticker"] not in valid_tickers]
+                stock_documents = [doc for doc in stock_documents if doc["ticker"] in valid_tickers]
+
+                if invalid_tickers:
+                    invalid_names = [doc["ticker"] for doc in invalid_tickers]
+                    print(f"[UPLOAD] Warning: Skipped invalid tickers: {invalid_names}")
+                    # Optionally could raise error instead of silently skipping:
+                    # raise HTTPException(400, f"Invalid tickers found: {', '.join(invalid_names)}")
+
+            except Exception as e:
+                print(f"[UPLOAD] Ticker validation failed: {e}")
+                # Proceed anyway — individual ticker validation will catch at add_position time
 
         documents_to_insert = [
             {
@@ -299,7 +364,7 @@ async def get_portfolio(portfolio_id: str):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     try:
-        positions_col = db[portfolio_id]
+        positions_col = db[_safe_collection_name(portfolio_id)]
         user_positions = list(positions_col.find({}, {"_id": 0}))
 
         invested_val = 0
@@ -325,21 +390,41 @@ async def get_portfolio(portfolio_id: str):
                 for t in tickers:
                     try:
                         ticker_df = data if len(tickers) == 1 else data[t]
-                        if not ticker_df.empty:
+                        if not ticker_df.empty and len(ticker_df) >= 1:
                             curr = ticker_df["Close"].iloc[-1]
                             prev = ticker_df["Close"].iloc[-2] if len(ticker_df) > 1 else curr
-                            market_data[t] = {"current": curr, "previous": prev}
-                    except:
-                        pass
+
+                            # Check for NaN (delisted or no data)
+                            if pd.isna(curr) or pd.isna(prev):
+                                print(f"[WARN] Price data missing for {t} (delisted or no trades), using avg_cost")
+                                market_data[t] = {"current": None, "previous": None}
+                            else:
+                                market_data[t] = {"current": float(curr), "previous": float(prev)}
+                        else:
+                            print(f"[WARN] No data rows for {t}")
+                            market_data[t] = {"current": None, "previous": None}
+                    except KeyError:
+                        print(f"[WARN] Ticker {t} not found in downloaded data")
+                        market_data[t] = {"current": None, "previous": None}
+                    except Exception as e:
+                        print(f"[WARN] Error processing {t}: {e}")
+                        market_data[t] = {"current": None, "previous": None}
             except Exception as e:
-                print(f"Bulk download failed: {e}")
+                print(f"[ERROR] Bulk yfinance download failed: {e}")
 
         for t, pos in ticker_to_pos.items():
             shares = float(pos.get("shares", 0))
             avg_cost = float(pos.get("average_cost", pos.get("avg_cost", 0)))
-            m_data = market_data.get(t, {"current": avg_cost, "previous": avg_cost})
-            current_price = m_data["current"]
-            previous_close = m_data["previous"]
+            m_data = market_data.get(t, {"current": None, "previous": None})
+
+            # Use market price if available and valid, otherwise fall back to avg_cost
+            current_price = m_data["current"] if m_data["current"] is not None else avg_cost
+            previous_close = m_data["previous"] if m_data["previous"] is not None else avg_cost
+
+            # Ensure we have valid floats
+            current_price = float(current_price) if not pd.isna(current_price) else avg_cost
+            previous_close = float(previous_close) if not pd.isna(previous_close) else avg_cost
+
             market_value = shares * current_price
             cost_basis = shares * avg_cost
 
@@ -348,11 +433,11 @@ async def get_portfolio(portfolio_id: str):
             total_previous_close_value += shares * previous_close
 
             pos.update({
-                "current_price": round(current_price, 2),
-                "market_value": round(market_value, 2),
-                "pl": round(market_value - cost_basis, 2),
-                "daily_change": round(((current_price - previous_close) / previous_close * 100), 2) if previous_close > 0 else 0,
-                "average_cost": avg_cost
+                "current_price": float(round(current_price, 2)),
+                "market_value": float(round(market_value, 2)),
+                "pl": float(round(market_value - cost_basis, 2)),
+                "daily_change": float(round(((current_price - previous_close) / previous_close * 100), 2)) if previous_close > 0 else 0.0,
+                "average_cost": float(avg_cost)
             })
             holdings_list.append(pos)
 
@@ -362,11 +447,11 @@ async def get_portfolio(portfolio_id: str):
         daily_change_pct = ((combined_current - combined_prev) / combined_prev * 100) if combined_prev > 0 else 0
 
         return {
-            "invested_value": round(invested_val, 2),
-            "cash_value": round(cash_val, 2),
-            "total_balance": round(combined_current, 2),
-            "total_profit": round(total_profit, 2),
-            "daily_change_pct": round(daily_change_pct, 2),
+            "invested_value": float(round(invested_val, 2)),
+            "cash_value": float(round(cash_val, 2)),
+            "total_balance": float(round(combined_current, 2)),
+            "total_profit": float(round(total_profit, 2)),
+            "daily_change_pct": float(round(daily_change_pct, 2)),
             "positions": holdings_list,
         }
     except Exception as e:
@@ -414,22 +499,79 @@ async def remove_position(portfolio_id: str, ticker: str):
         "deleted_count": result.deleted_count
     }
 
+# Simple in-memory cache: ticker -> (is_valid, error_msg, timestamp)
+_TICKER_CACHE = {}
+_TICKER_CACHE_TTL = 3600  # 1 hour
+
+def _validate_ticker(ticker: str) -> tuple[bool, str]:
+    """
+    Validate that a ticker symbol exists and has recent price data.
+    Results are cached for 1 hour to rate-limit yfinance calls.
+
+    Returns:
+        (is_valid, error_message)
+    """
+    import yfinance as yf
+
+    # Check cache first
+    now = time.time()
+    if ticker in _TICKER_CACHE:
+        ts, is_valid, msg = _TICKER_CACHE[ticker]
+        if now - ts < _TICKER_CACHE_TTL:
+            return is_valid, msg
+
+    # Basic format check: 1-6 uppercase alphanumeric, may include . for mutual funds (BRK.A)
+    import re as _re
+    if not _re.match(r'^[A-Z0-9]{1,6}(\.[A-Z])?$', ticker):
+        result = (False, f"Invalid ticker format: '{ticker}'")
+        _TICKER_CACHE[ticker] = (now,) + result
+        return result
+
+    try:
+        # Quick check: fetch 1 day of history (lightweight)
+        ticker_obj = yf.Ticker(ticker)
+        hist = ticker_obj.history(period="5d", prepost=False)
+
+        if hist.empty:
+            result = (False, f"Ticker '{ticker}' not found or has no trading data")
+        else:
+            # Check the most recent close is not NaN
+            last_close = hist["Close"].iloc[-1]
+            if pd.isna(last_close):
+                result = (False, f"Ticker '{ticker}' has no valid price data")
+            else:
+                result = (True, "")
+
+        _TICKER_CACHE[ticker] = (now,) + result
+        return result
+
+    except Exception as e:
+        result = (False, f"Could not validate ticker '{ticker}': {str(e)}")
+        _TICKER_CACHE[ticker] = (now,) + result
+        return result
+
+
 @router.post("/portfolios/{portfolio_id}/positions")
 async def add_position(portfolio_id: str, request: dict):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
-    
+
     ticker = request.get("ticker", "").strip().upper()
     shares = request.get("shares")
     avg_cost = request.get("average_cost")
-    
+
     if not ticker or ticker == "CASH":
         raise HTTPException(status_code=400, detail="Invalid ticker")
     if shares is None or shares <= 0:
         raise HTTPException(status_code=400, detail="Shares must be a positive number")
     if avg_cost is None or avg_cost < 0:
         raise HTTPException(status_code=400, detail="Average cost required and must be non-negative")
-    
+
+    # Validate ticker exists via yfinance
+    is_valid, error_msg = _validate_ticker(ticker)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+
     collection = db[_safe_collection_name(portfolio_id)]
     
     # Upsert: replace or insert
@@ -544,10 +686,14 @@ async def ai_chat(request: dict):
         "use_web_search": true             # optional, defaults to true
     }
     """
+    start_time = time.time()
+    print(f"[CHAT] Received request at {time.strftime('%H:%M:%S')}")
+    print(f"[CHAT] Request keys: {list(request.keys()) if isinstance(request, dict) else type(request)}")
     try:
         user_message = request.get("message", "").strip()
         portfolio_id = request.get("portfolio_id", "").strip()
-        use_web_search = request.get("use_web_search", True)  # default True per user pref
+        use_web_search = request.get("use_web_search", True)
+        print(f"[CHAT] message_len={len(user_message)}, portfolio_id='{portfolio_id}', use_web_search={use_web_search}")
 
         if not user_message:
             raise HTTPException(status_code=400, detail="Message is required")
@@ -559,7 +705,7 @@ async def ai_chat(request: dict):
                 portfolio_context = "(Note: Portfolio data unavailable — database disconnected)"
             else:
                 try:
-                    positions_col = db[portfolio_id]
+                    positions_col = db[_safe_collection_name(portfolio_id)]
                     user_positions = list(positions_col.find({}, {"_id": 0}))
                     if user_positions:
                         portfolio_context = _format_portfolio_summary(portfolio_id, user_positions)
@@ -567,15 +713,26 @@ async def ai_chat(request: dict):
                     print(f"Warning: Could not fetch portfolio '{portfolio_id}': {e}")
                     portfolio_context = f"(Note: Portfolio '{portfolio_id}' data could not be loaded)"
 
-        # --- Fetch web search results if enabled and triggered ---
+        # --- Fetch web search results if enabled ---
         web_search_results = ""
         web_search_used = False
-        if use_web_search and should_trigger_search(user_message):
+        print(f"[WEB] use_web_search={use_web_search}, message='{user_message[:50]}...'")
+        if use_web_search:
             try:
+                print(f"[WEB] Performing web search (user enabled)...")
                 web_search_results = web_search_cached(user_message, max_results=5)
                 web_search_used = bool(web_search_results)
+                print(f"[WEB] Results length: {len(web_search_results)} chars")
+                if web_search_results:
+                    print(f"[WEB] Preview: {web_search_results[:150]}...")
+                else:
+                    print(f"[WEB] No results found")
             except Exception as e:
-                print(f"Web search skipped (error): {e}")
+                print(f"[WEB] Error during search: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"[WEB] Web search disabled by user (toggle unchecked)")
 
         # --- Build final prompt with both portfolio + web context ---
         context_parts = []
@@ -592,20 +749,57 @@ async def ai_chat(request: dict):
         print(f"Sending to {AI_BACKEND_NAME} (context length: {len(enhanced_prompt)} chars)...")
 
         # Call the selected AI backend (LM Studio or Ollama)
+        print(f"[CHAT] Calling AI backend...")
         result = await call_ai_backend(enhanced_prompt)
+        print(f"[CHAT] AI backend returned. Result type: {type(result)}")
 
-        if "choices" not in result or len(result["choices"]) == 0:
-            raise HTTPException(status_code=502, detail=f"Invalid response format from {AI_BACKEND_NAME}")
+        # DEBUG: Full response inspection
+        print(f"[DEBUG] Raw result type: {type(result)}")
+        if isinstance(result, dict):
+            print(f"[DEBUG] Result keys: {list(result.keys())}")
+            choices = result.get("choices")
+            print(f"[DEBUG] choices type: {type(choices)}, value: {choices}")
+            if choices and isinstance(choices, list) and len(choices) > 0:
+                print(f"[DEBUG] First choice: type={type(choices[0])}, keys={list(choices[0].keys()) if isinstance(choices[0], dict) else 'N/A'}")
+        else:
+            print(f"[DEBUG] Raw result (first 500): {str(result)[:500]}")
+            raise HTTPException(status_code=502, detail=f"Non-dict response from {AI_BACKEND_NAME}")
 
-        ai_response = result["choices"][0]["message"]["content"]
-
-        return {
+        # Validate response structure — OpenAI chat completion format
+        choices = result.get("choices")
+        if not choices or not isinstance(choices, list) or len(choices) == 0:
+            print(f"[DEBUG] VALIDATION FAILED: choices invalid. Got: {choices}")
+            raise HTTPException(status_code=502, detail=f"Empty or missing 'choices' in response from {AI_BACKEND_NAME}")
+        
+        first_choice = choices[0]
+        if not isinstance(first_choice, dict):
+            raise HTTPException(status_code=502, detail=f"Invalid choice format from {AI_BACKEND_NAME}: expected dict, got {type(first_choice)}")
+        
+        # Get message object — OpenAI chat completions use 'message', completions use 'text'
+        message_obj = first_choice.get("message") or first_choice
+        if not isinstance(message_obj, dict):
+            # Legacy 'text' field in choice directly
+            ai_response = first_choice.get("text", "")
+        else:
+            ai_response = message_obj.get("content", "")
+        
+        if not ai_response or not isinstance(ai_response, str):
+            raise HTTPException(status_code=502, detail=f"No valid text content in response from {AI_BACKEND_NAME}")
+        
+        # DEBUG — show what we're returning
+        print(f"[DEBUG] About to return: response_len={len(ai_response)}, portfolio_context_included={bool(portfolio_context)}, web_search_used={web_search_used}")
+        
+        return_dict = {
             "response": ai_response,
             "model": result.get("model", "unknown"),
             "backend": AI_BACKEND_NAME,
             "portfolio_context_included": bool(portfolio_context),
             "web_search_used": web_search_used,
         }
+        print(f"[DEBUG] Returning dict keys: {list(return_dict.keys())}")
+        elapsed = time.time() - start_time
+        print(f"[CHAT] Completed in {elapsed:.2f}s")
+        return return_dict
 
     except HTTPException:
         raise

@@ -159,15 +159,30 @@
         </footer>
     </div>
 
-    <!-- Add/Edit Position Modal -->
-    <div id="positionModal" class="modal-overlay">
-        <div class="modal-content">
-            <h3 id="modalTitle">Add Position</h3>
-            <form id="positionForm">
-                <div class="form-group">
-                    <label for="tickerInput">Ticker</label>
-                    <input type="text" id="tickerInput" placeholder="AAPL" required maxlength="10">
-                </div>
+     <!-- Add/Edit Position Modal -->
+     <div id="positionModal" class="modal-overlay">
+         <div class="modal-content">
+             <h3 id="modalTitle">Add Position</h3>
+             <form id="positionForm">
+                 <div class="form-group">
+                     <label for="tickerInput">Ticker</label>
+                     <input type="text" id="tickerInput" placeholder="AAPL" required maxlength="10">
+                 </div>
+                 <div class="form-group">
+                     <label for="sharesInput">Shares</label>
+                     <input type="number" id="sharesInput" step="0.01" min="0.01" required>
+                 </div>
+                 <div class="form-group">
+                     <label for="costInput">Average Cost ($)</label>
+                     <input type="number" id="costInput" step="0.01" min="0" required>
+                 </div>
+                 <div class="modal-actions">
+                     <button type="button" id="cancelBtn" class="btn-cancel">Cancel</button>
+                     <button type="submit" class="btn-primary">Save</button>
+                 </div>
+             </form>
+         </div>
+     </div>
                 <div class="form-group">
                     <label for="sharesInput">Shares</label>
                     <input type="number" id="sharesInput" step="0.01" min="0.01" required>
@@ -177,7 +192,7 @@
                     <input type="number" id="costInput" step="0.01" min="0" required>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" id="cancelBtn">Cancel</button>
+                    <button type="button" id="cancelBtn" class="btn-cancel">Cancel</button>
                     <button type="submit" class="btn-primary">Save</button>
                 </div>
             </form>
@@ -194,7 +209,7 @@
                     <input type="number" id="cashAmountInput" step="0.01" min="0.01" required>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" id="cashCancelBtn">Cancel</button>
+                    <button type="button" id="cashCancelBtn" class="btn-cancel">Cancel</button>
                     <button type="submit" class="btn-primary" id="cashSubmitBtn">Deposit</button>
                 </div>
             </form>

@@ -29,7 +29,7 @@ def web_search_cached(query: str, max_results: int = 5) -> str:
 
 def _web_search_raw(query: str, max_results: int = 5, timeout: float = 10.0) -> str:
     """
-    Raw DuckDuckGo search — returns formatted snippets or "" on failure.
+    Raw DuckDuckGo search - returns formatted snippets or "" on failure.
     Uses ddgs v2+ API: DDGS(timeout=...) as context manager.
     """
     start = time.time()

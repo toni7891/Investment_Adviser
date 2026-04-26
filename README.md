@@ -368,5 +368,41 @@ A special `CASH` ticker represents uninvested cash.
 ## 🛡️ License
 MIT License — feel free to use and modify.
 
+
+## 🧪 Testing
+
+The project includes **minimal smoke tests** (happy path only) that verify core endpoints are operational. No edge cases are covered — these are quick health checks.
+
+### Running Tests
+
+```bash
+# Run all smoke tests (default)
+python run_tests.py
+
+# Verbose output
+python run_tests.py -vv
+
+# With coverage report
+python run_tests.py --coverage
+
+# Run tests directly with pytest
+pytest tests/smoke -v
+```
+
+### Test Coverage
+
+Smoke tests cover:
+- `/status` health check
+- `/` frontend serving
+- `/api/portfolios/list` (empty)
+- `/api/portfolios/{id}` (404 case)
+- `POST /api/portfolios/{id}/positions` (valid and invalid ticker)
+- `POST /api/portfolios/{id}/cash/deposit`
+- `POST /api/portfolios/{id}/cash/withdraw`
+- `POST /api/chat` (with and without portfolio context)
+- `GET /api/portfolios/{id}` metric calculations
+
+Test files live in `tests/smoke/`.
+
 ---
 *Developed by [toni7891](https://github.com/toni7891)*
