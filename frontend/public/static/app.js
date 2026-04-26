@@ -3,11 +3,9 @@
 /* Unified version: Combines features from public/app.js and static/app.js   */
 /*****************************************************************************/
 
-// Wait for the DOM to fully load before executing JavaScript
 document.addEventListener("DOMContentLoaded", () => {
   /****************************************************************************
    * SECTION 1: DOM ELEMENT REFERENCES                                        *
-   * Cache references to frequently-used elements for better performance      *
    ****************************************************************************/
   const landingPage = document.getElementById("landing-page");
   const dashboardPage = document.getElementById("dashboard-page");
@@ -22,7 +20,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const investedAmountEl = document.getElementById("investedAmount");
   const cashAmountEl = document.getElementById("cashAmount");
 
-  // Chat elements
   const chatInput = document.getElementById("chatInput");
   const sendButton = document.getElementById("sendButton");
   const chatMessages = document.getElementById("chatMessages");
@@ -32,14 +29,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadProgress = document.getElementById("uploadProgress");
   const toastContainer = document.getElementById("toastContainer");
 
-  // Store the currently selected portfolio ID (null initially)
   let currentPortfolioId = null;
 
   /****************************************************************************
    * SECTION 2: UTILITY FUNCTIONS                                             *
-   * Helper functions for formatting and UI updates                           *
    ****************************************************************************/
-
   const formatCurrency = (value) =>
     `$${Number(value || 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
@@ -59,9 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /****************************************************************************
    * SECTION 3: UI NAVIGATION FUNCTIONS                                       *
-   * Handle switching between landing page and dashboard view                 *
    ****************************************************************************/
-
   function showDashboard() {
     if (landingPage) landingPage.classList.add("hidden");
     if (dashboardPage) dashboardPage.classList.remove("hidden");
@@ -74,130 +66,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /****************************************************************************
    * SECTION 4: UPLOAD STATE MANAGEMENT                                       *
-   * Handle UI states during file upload operations                          *
    ****************************************************************************/
-
   function setUploadLoading(isLoading) {
-    if (uploadProgress) {
-      uploadProgress.classList.toggle("hidden", !isLoading);
-    }
-    if (uploadPortfolioButton) {
-      uploadPortfolioButton.disabled = isLoading;
-    }
-    if (uploadDropZone) {
-      uploadDropZone.classList.toggle("is-loading", isLoading);
-    }
+    if (uploadProgress) uploadProgress.classList.toggle("hidden", !isLoading);
+    if (uploadPortfolioButton) uploadPortfolioButton.disabled = isLoading;
+    if (uploadDropZone) uploadDropZone.classList.toggle("is-loading", isLoading);
 
     const addCard = document.getElementById("addPortfolioCard");
     if (addCard) {
       addCard.classList.toggle("is-loading", isLoading);
       const labelElement = addCard.querySelector(".add-label");
-      if (labelElement && isLoading) {
-        labelElement.textContent = "Uploading...";
-      } else if (labelElement) {
-        labelElement.textContent = "Add Portfolio";
-      }
+      if (labelElement) labelElement.textContent = isLoading ? "Uploading..." : "Add Portfolio";
     }
   }
 
   /****************************************************************************
    * SECTION 5: TOAST NOTIFICATION SYSTEM                                     *
-   * Display temporary status messages to the user                            *
    ****************************************************************************/
-
   function showToast(message, type = "error") {
     if (!toastContainer) return;
-
     const toast = document.createElement("div");
     toast.className = `toast toast--${type}`;
     toast.textContent = message;
-
     toastContainer.appendChild(toast);
 
-    window.setTimeout(() => {
-      toast.classList.add("toast--visible");
-    }, 10);
-
+    window.setTimeout(() => toast.classList.add("toast--visible"), 10);
     window.setTimeout(() => {
       toast.classList.remove("toast--visible");
-      window.setTimeout(() => {
-        toast.remove();
-      }, 300);
+      window.setTimeout(() => toast.remove(), 300);
     }, 3800);
   }
 
   /****************************************************************************
    * SECTION 6: FILE UPLOAD HANDLERS                                          *
-   * Handle triggering file selection for portfolio uploads                   *
    ****************************************************************************/
-
   function openFilePicker(event) {
-    if (event) {
-      event.preventDefault();
-    }
-
+    if (event) event.preventDefault();
     if (!portfolioUpload) return;
-
-    if (typeof portfolioUpload.showPicker === "function") {
-      try {
-        portfolioUpload.showPicker();
-        return;
-      } catch (showPickerError) {
-        console.warn("showPicker failed, falling back to click()", showPickerError);
-      }
-    }
-
     portfolioUpload.value = "";
     portfolioUpload.click();
   }
 
   async function uploadPortfolioFile(file) {
     if (!file) return;
-
     setUploadLoading(true);
-
     try {
       const formData = new FormData();
       formData.append("file", file);
-
-      const response = await fetch("/api/portfolios/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        data = {};
-      }
-
-      if (!response.ok) {
-        throw new Error(data.detail || `Upload failed with HTTP ${response.status}`);
-      }
-
+      const response = await fetch("/api/portfolios/upload", { method: "POST", body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `Upload failed`);
       showToast(`Uploaded ${data.portfolio_name || "portfolio"} successfully.`, "success");
       await loadPortfolios();
     } catch (error) {
-      console.error("Failed to upload portfolio", error);
       showToast(error.message || "Failed to upload portfolio.", "error");
     } finally {
       setUploadLoading(false);
     }
   }
 
-
   /****************************************************************************
    * SECTION 7: BACKEND STATUS MONITORING                                     *
-   * Check if MongoDB connection is active                                    *
    ****************************************************************************/
-
   function updateStatusIndicators() {
     const mongoStatus = document.getElementById("mongoStatus");
-
     fetch("/api/portfolios/list")
       .then((resp) => {
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error();
         if (mongoStatus) {
           mongoStatus.textContent = "Connected";
           mongoStatus.style.color = "#10b981";
@@ -213,9 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /****************************************************************************
    * SECTION 8: DATA LOADING FUNCTIONS                                        *
-   * Fetch portfolio data from backend API endpoints                          *
    ****************************************************************************/
-
   function loadSummary() {
     if (!currentPortfolioId) return;
 
@@ -238,18 +171,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (totalProfitEl) {
           totalProfitEl.textContent = `${totalProfit >= 0 ? "+" : ""}${formatCurrency(totalProfit)}`;
           setSignedStatus(totalProfitEl, totalProfit);
-          totalProfitEl.style.color = "";
         }
 
         if (dailyChangeEl) {
           dailyChangeEl.textContent = formatPercent(dailyChangePct);
           setSignedStatus(dailyChangeEl, dailyChangePct);
-          dailyChangeEl.style.color = "";
         }
 
-        if (currentPortfolioEl) {
-          currentPortfolioEl.textContent = currentPortfolioId;
-        }
+        if (currentPortfolioEl) currentPortfolioEl.textContent = currentPortfolioId;
 
         const holdingsBody = document.getElementById("holdingsBody");
         let bestStock = null;
@@ -269,21 +198,61 @@ document.addEventListener("DOMContentLoaded", () => {
               bestStock = stock;
             }
 
-            const row = document.createElement("tr");
-            row.className = "border-b border-gray-700 hover:bg-gray-800 transition-colors";
-            row.innerHTML = `
-              <td class="py-3 px-4">${stock.ticker ?? ""}</td>
-              <td class="py-3 px-4">${shares}</td>
-              <td class="py-3 px-4">${formatCurrency(currentPrice)}</td>
-              <td class="py-3 px-4">${formatCurrency(marketValue)}</td>
-              <td class="py-3 px-4 ${dayChangePct >= 0 ? "success" : "negative"}">
-                ${formatPercent(dayChangePct)}
-              </td>
-              <td class="py-3 px-4 ${totalPnL >= 0 ? "success" : "negative"}">
-                ${formatCurrency(totalPnL)}
-              </td>
-            `;
-            holdingsBody.appendChild(row);
+             const row = document.createElement("tr");
+             row.className = "border-b border-gray-700 hover:bg-gray-800 transition-colors";
+             row.innerHTML = `
+               <td class="py-3 px-4">${stock.ticker ?? ""}</td>
+               <td class="py-3 px-4">${shares}</td>
+               <td class="py-3 px-4">${formatCurrency(currentPrice)}</td>
+               <td class="py-3 px-4">${formatCurrency(marketValue)}</td>
+               <td class="py-3 px-4 ${dayChangePct >= 0 ? "success" : "negative"}">
+                 ${formatPercent(dayChangePct)}
+               </td>
+               <td class="py-3 px-4 ${totalPnL >= 0 ? "success" : "negative"}">
+                 ${formatCurrency(totalPnL)}
+               </td>
+               <td class="py-3 px-4">
+                 <button class="btn-edit" data-ticker="${stock.ticker}">Edit</button>
+                 <button class="btn-delete" data-ticker="${stock.ticker}">Delete</button>
+               </td>
+             `;
+             holdingsBody.appendChild(row);
+          });
+
+          // Attach listeners to new edit/delete buttons
+          holdingsBody.querySelectorAll('.btn-edit').forEach(button => {
+            button.addEventListener('click', (e) => {
+              const ticker = e.target.getAttribute('data-ticker');
+              if (!ticker || !currentPortfolioId) return;
+              const stock = data.positions.find(p => p.ticker === ticker);
+              if (stock) openPositionModal(true, stock);
+            });
+          });
+
+          holdingsBody.querySelectorAll('.btn-delete').forEach(button => {
+            button.addEventListener('click', async (e) => {
+              const ticker = e.target.getAttribute('data-ticker');
+              if (!ticker || !currentPortfolioId) return;
+
+              if (confirm(`Are you sure you want to delete ${ticker} from your portfolio?`)) {
+                try {
+                  const response = await fetch(`/api/portfolios/${currentPortfolioId}/positions/${ticker}`, {
+                    method: "DELETE",
+                  });
+
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                  }
+
+                  showToast(`Position ${ticker} deleted successfully`, "success");
+                  loadSummary(); // Refresh the dashboard
+                } catch (error) {
+                  console.error("Failed to delete position:", error);
+                  showToast(error.message || "Failed to delete position", "error");
+                }
+              }
+            });
           });
         }
 
@@ -291,46 +260,31 @@ document.addEventListener("DOMContentLoaded", () => {
           const bestChange = Number(bestStock.daily_change || 0);
           highestGrowthEl.textContent = `${bestStock.ticker} (${formatPercent(bestChange)})`;
           setSignedStatus(highestGrowthEl, bestChange);
-          highestGrowthEl.style.color = "";
         }
-
         updateStatusIndicators();
       })
       .catch((err) => {
-        console.error("Failed to load portfolio summary", err);
+        console.error("Load Summary Error:", err);
         if (totalBalanceEl) totalBalanceEl.textContent = "Error";
       });
   }
 
   async function loadPortfolios() {
     if (!portfolioList) return;
-
     try {
       const response = await fetch("/api/portfolios/list");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
       const data = await response.json();
       const names = data.portfolios || [];
       portfolioList.innerHTML = "";
 
       if (names.length === 0) {
-        const emptyCard = document.createElement("div");
-        emptyCard.className = "portfolio-card portfolio-card--empty";
-        emptyCard.innerHTML = `
-          <div class="portfolio-card__title">No portfolios found</div>
-          <div class="portfolio-card__meta">Upload an Excel template to create your first portfolio.</div>
-        `;
-        portfolioList.appendChild(emptyCard);
+        portfolioList.innerHTML = '<div class="portfolio-card portfolio-card--empty">No portfolios found</div>';
       }
 
       names.forEach((name) => {
         const btn = document.createElement("button");
         btn.className = "portfolio-card";
-        btn.type = "button";
-        btn.innerHTML = `
-          <div class="portfolio-card__title">${name}</div>
-          <div class="portfolio-card__meta">Open portfolio</div>
-        `;
+        btn.innerHTML = `<div class="portfolio-card__title">${name}</div><div class="portfolio-card__meta">Open portfolio</div>`;
         btn.addEventListener("click", () => {
           currentPortfolioId = name;
           if (portfolioTitle) portfolioTitle.textContent = name;
@@ -339,58 +293,31 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         portfolioList.appendChild(btn);
       });
-
     } catch (err) {
-      console.error("Failed to load portfolios", err);
-      portfolioList.innerHTML = `
-        <div class="portfolio-card portfolio-card--empty">
-          <div class="portfolio-card__title">Failed to load portfolios</div>
-          <div class="portfolio-card__meta">Please refresh the page and try again.</div>
-        </div>
-      `;
+      console.error("Load Portfolios Error:", err);
     }
   }
 
   /****************************************************************************
    * SECTION 9: AI CHAT FUNCTIONALITY                                        *
-   * Handles communication with LM Studio via backend                         *
    ****************************************************************************/
-
   const escapeHtml = (text) => {
-    const map = {
-      '&': '\u0026',
-      '<': '\u003c',
-      '>': '\u003e',
-      '"': '\u0022',
-      "'": '\u0027',
-    };
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
     return String(text).replace(/[&<>"']/g, (m) => map[m]);
-  };
-
-  const scrollToChatBottom = () => {
-    setTimeout(() => {
-      if (chatMessages) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
-    }, 50);
   };
 
   const addChatMessage = (content, isUser) => {
     if (!chatMessages) return;
-
     const messageDiv = document.createElement("div");
     messageDiv.className = `message ${isUser ? "user" : "bot"}`;
     messageDiv.innerHTML = `<p>${escapeHtml(content)}</p>`;
     chatMessages.appendChild(messageDiv);
-    scrollToChatBottom();
+    chatMessages.scrollTop = chatMessages.scrollHeight;
   };
 
   const handleSendMessage = async () => {
-    if (!chatInput || !sendButton) return;
-
     const message = chatInput.value.trim();
     if (!message) return;
-
     addChatMessage(message, true);
     chatInput.value = "";
 
@@ -400,97 +327,134 @@ document.addEventListener("DOMContentLoaded", () => {
     loadingDiv.className = "message bot loading";
     loadingDiv.innerHTML = `<p><em>AI is thinking...</em></p>`;
     chatMessages.appendChild(loadingDiv);
-    scrollToChatBottom();
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
       const data = await response.json();
       document.getElementById(loadingId)?.remove();
       addChatMessage(data.response, false);
     } catch (error) {
-      console.error("Chat error:", error);
       document.getElementById(loadingId)?.remove();
-      addChatMessage(
-        `Error: ${error.message}. Make sure LM Studio is running on port 1234.`,
-        false
-      );
+      addChatMessage("Error: Connection failed.", false);
     }
   };
 
-  if (sendButton) {
-    sendButton.addEventListener("click", handleSendMessage);
-  }
-
-  if (chatInput) {
-    chatInput.addEventListener("keypress", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        handleSendMessage();
-      }
-    });
-  }
+  sendButton?.addEventListener("click", handleSendMessage);
+  chatInput?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+  });
 
   /****************************************************************************
-   * SECTION 10: EVENT LISTENERS & INITIALIZATION                             *
-   * Wire up all interactive elements                                         *
+   * SECTION 10 & 11: MODAL & CASH FUNCTIONALITY                              *
    ****************************************************************************/
+   const positionModal = document.getElementById("positionModal");
+   const modalTitle = document.getElementById("modalTitle");
+   const positionForm = document.getElementById("positionForm");
+   const tickerInput = document.getElementById("tickerInput");
+   const sharesInput = document.getElementById("sharesInput");
+   const costInput = document.getElementById("costInput");
+   const cancelBtn = document.getElementById("cancelBtn");
 
+   let isEditing = false;
+   let originalTicker = null;
+
+   function openPositionModal(isEdit = false, stockData = null) {
+     if (!positionModal) return;
+     
+     isEditing = isEdit;
+     originalTicker = stockData ? stockData.ticker : null;
+     
+     modalTitle.textContent = isEdit ? "Edit Position" : "Add Position";
+     
+     if (isEdit && stockData) {
+       tickerInput.value = stockData.ticker || "";
+       tickerInput.disabled = true;  // Lock ticker during edit
+       sharesInput.value = stockData.shares || "";
+       costInput.value = stockData.average_cost || "";
+     } else {
+       tickerInput.value = "";
+       tickerInput.disabled = false;
+       sharesInput.value = "";
+       costInput.value = "";
+     }
+     
+     positionModal.classList.add("active");
+     tickerInput.focus();
+   }
+
+  function closePositionModal() {
+    positionModal?.classList.remove("active");
+    positionForm?.reset();
+  }
+
+  function openCashModal(isDeposit = true) {
+    if (!cashModal) return;
+    cashModalTitle.textContent = isDeposit ? "Deposit Cash" : "Withdraw Cash";
+    cashSubmitBtn.textContent = isDeposit ? "Deposit" : "Withdraw";
+    cashForm.dataset.operation = isDeposit ? "deposit" : "withdraw";
+    cashModal.classList.add("active");
+    cashAmountInput.focus();
+  }
+
+  function closeCashModal() {
+    cashModal?.classList.remove("active");
+    cashForm?.reset();
+  }
+
+  positionForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const ticker = tickerInput.value.trim().toUpperCase();
+    const shares = parseFloat(sharesInput.value);
+    const average_cost = parseFloat(costInput.value);
+
+    try {
+      const response = await fetch(`/api/portfolios/${currentPortfolioId}/positions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, shares, average_cost }),
+      });
+      if (!response.ok) throw new Error("Save failed");
+      showToast("Saved successfully", "success");
+      closePositionModal();
+      loadSummary();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  });
+
+  cashForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(cashAmountInput.value);
+    const operation = cashForm.dataset.operation;
+    try {
+      const response = await fetch(`/api/portfolios/${currentPortfolioId}/cash/${operation}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      if (!response.ok) throw new Error(`${operation} failed`);
+      showToast(`Success: ${operation}`, "success");
+      closeCashModal();
+      loadSummary();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  });
+
+  addPositionBtn?.addEventListener("click", () => openPositionModal(false));
+  cancelBtn?.addEventListener("click", closePositionModal);
+  depositCashBtn?.addEventListener("click", () => openCashModal(true));
+  withdrawCashBtn?.addEventListener("click", () => openCashModal(false));
+  cashCancelBtn?.addEventListener("click", closeCashModal);
   backButton?.addEventListener("click", showLanding);
   uploadPortfolioButton?.addEventListener("click", openFilePicker);
 
-  portfolioUpload?.addEventListener("change", (event) => {
-    const file = event.target.files && event.target.files[0];
-    uploadPortfolioFile(file);
-  });
-
-  if (uploadDropZone) {
-    const preventDefaults = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-      uploadDropZone.addEventListener(eventName, preventDefaults, false);
-    });
-
-    ["dragenter", "dragover"].forEach((eventName) => {
-      uploadDropZone.addEventListener(eventName, () => {
-        uploadDropZone.classList.add("drag-active");
-      });
-    });
-
-    ["dragleave", "drop"].forEach((eventName) => {
-      uploadDropZone.addEventListener(eventName, () => {
-        uploadDropZone.classList.remove("drag-active");
-      });
-    });
-
-    uploadDropZone.addEventListener("drop", (event) => {
-      const files = event.dataTransfer?.files;
-      if (files && files.length > 0) {
-        uploadPortfolioFile(files[0]);
-      }
-    });
-
-    uploadDropZone.addEventListener("click", (event) => {
-      if (event.target === uploadDropZone) {
-        openFilePicker();
-      }
-    });
-  }
+  portfolioUpload?.addEventListener("change", (e) => uploadPortfolioFile(e.target.files[0]));
 
   updateStatusIndicators();
   loadPortfolios();
 });
-

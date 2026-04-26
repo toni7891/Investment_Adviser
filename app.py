@@ -11,7 +11,7 @@ except ImportError:
 
 app = FastAPI()
 
-app.include_router(routes.router)
+app.include_router(routes.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,6 +4,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 import sys
+import warnings
+
+# Suppress ResourceWarning about unclosed SQLite databases from third-party libraries
+# These are harmless and come from dependencies we don't control
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed database*")
+
 current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
@@ -16,9 +22,20 @@ except ImportError:
 app = FastAPI()
 
 app.include_router(routes.router, prefix="/api", tags=["api"])
+
 @app.on_event("startup")
 def on_startup():
     print("Backend server starting up...")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    """Close all database connections cleanly on shutdown."""
+    # Close MongoDB connection if available
+    try:
+        from database import close_connection
+        close_connection()
+    except Exception as e:
+        print(f"⚠️  Error during shutdown cleanup: {e}")
 
 
 @app.get("/status", response_model=dict, include_in_schema=True)

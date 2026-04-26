@@ -3,6 +3,9 @@ node_modules
 old_styles
 old_js
 __pycache__/
+backend/__pycache__/
+backend/models/__pycache__/
 *.py[cod]
 .dist
 .DS_Store
+.kilo

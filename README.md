@@ -51,17 +51,88 @@ curl -X POST http://localhost:8000/api/chat \
 
 ### LM Studio Setup
 
-The AI requires LM Studio running locally with an OpenAI-compatible API server:
+The AI requires a local LLM running with an OpenAI-compatible API server. You can use either **LM Studio** or **Ollama**:
+
+#### Using LM Studio:
 
 1. Download [LM Studio](https://lmstudio.ai/)
 2. Load a local model (Llama 3, Mistral, etc.)
 3. Start the server (usually at `http://localhost:1234`)
-4. The backend is configured to use that endpoint by default
+4. The backend defaults to using that endpoint
+
+#### Using Ollama:
+
+1. Install [Ollama](https://ollama.ai/)
+2. Pull a model: `ollama pull llama3`
+3. Start Ollama (it runs on `http://localhost:11434` by default)
+4. Set `LLM_BACKEND=ollama` in your `.env` file
 
 **Configurable in `backend/routes.py`:**
 ```python
+# For LM Studio (default)
 LM_STUDIO_API_URL = "http://localhost:1234/v1/chat/completions"
+
+# For Ollama
+# LLM_BACKEND = "ollama"
+# OLLAMA_API_URL = "http://localhost:11434/v1/chat/completions"
+# OLLAMA_MODEL = "llama3"
 ```
+
+Set these as environment variables in your `.env` file:
+```env
+LLM_BACKEND=lmstudio              # or "ollama"
+LM_STUDIO_API_URL=http://localhost:1234/v1/chat/completions
+OLLAMA_API_URL=http://localhost:11434/v1/chat/completions
+OLLAMA_MODEL=llama3
+```
+
+---
+
+## 🔍 Web Search (Experimental)
+
+The AI can optionally include real-time information from DuckDuckGo when you enable the "Include web search" checkbox in the chat panel (enabled by default).
+
+### Usage
+
+Enable the checkbox before sending your question. If your question likely needs current information, a web search runs automatically and results are included in the AI's context.
+
+**API:**
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Current price of TSLA", "use_web_search": true}'
+```
+
+The `use_web_search` field defaults to `true` if omitted.
+
+**Response includes a usage flag:**
+```json
+{
+  "response": "NVDA is currently trading around $140...",
+  "model": "llama-3-...",
+  "backend": "LM Studio",
+  "portfolio_context_included": false,
+  "web_search_used": true
+}
+```
+
+### How it works
+
+1. When `use_web_search` is enabled, the backend checks if your question likely needs current data using keyword triggers (e.g., "current", "latest", "news", "price", "forecast", "analyst").
+2. If triggered, a DuckDuckGo search runs (up to 5 results).
+3. Results are formatted and included in the prompt sent to the LLM.
+4. The AI is instructed to cite sources when referencing web data.
+
+### Limitations
+
+- DuckDuckGo is unauthenticated and may rate-limit frequent queries.
+- Not suitable for high-volume or commercial use cases.
+- Results are summaries and may be incomplete or outdated.
+- The AI may occasionally misinterpret snippets; treat financial advice as educational.
+
+### Future improvements
+
+Consider upgrading to Tavily or Brave Search APIs for higher reliability, richer financial data, and dedicated finance indexing.
 
 ---
 
@@ -157,8 +228,13 @@ The server starts at `http://127.0.0.1:8000`. Navigate to the dashboard.
 | `GET` | `/api/portfolios/{portfolio_id}` | Fetch metrics & live pricing for a portfolio |
 | `POST` | `/api/portfolios/upload` | Upload Excel file to create/update portfolio |
 | `POST` | `/api/chat` | AI chat — include `portfolio_id` for portfolio-aware advice |
+| `POST` | `/api/portfolios/{portfolio_id}/positions` | Add or update a stock position |
+| `DELETE` | `/api/portfolios/{portfolio_id}/positions/{ticker}` | Remove a stock position |
+| `POST` | `/api/portfolios/{portfolio_id}/cash/deposit` | Deposit cash into portfolio |
+| `POST` | `/api/portfolios/{portfolio_id}/cash/withdraw` | Withdraw cash from portfolio |
 
 ### Portfolio Response Schema
+
 ```json
 {
   "invested_value": 15000.00,
@@ -211,6 +287,68 @@ Portfolios can be uploaded via an Excel file. The expected format:
 Example template: [`investment_tamplate.xlsx`](investment_tamplate.xlsx) in the project root.
 
 To use: POST the `.xlsx` file to `/api/portfolios/upload` via the dashboard UI or API client.
+
+## 🎯 Adding & Removing Positions
+
+The dashboard allows you to add, edit, or remove individual stock positions without re-uploading the entire Excel file.
+
+### UI Actions
+
+- **Add Stock** — Click the `+ Add Stock` button above the holdings table to open a modal. Enter ticker, shares, and average cost.
+- **Edit Position** — Click the ✏️ icon on any row to modify shares or average cost (ticker cannot be changed).
+- **Remove Position** — Click the 🗑️ icon on any row to delete that holding (except CASH, which is protected).
+
+After any change, the portfolio metrics (total balance, P&L, etc.) refresh automatically.
+
+### API
+
+**Add or update a position:**
+```bash
+curl -X POST http://localhost:8000/api/portfolios/4RCH3R/positions \
+  -H "Content-Type: application/json" \
+  -d '{"ticker":"AAPL","shares":25,"average_cost":175.50}'
+```
+
+**Remove a position:**
+```bash
+curl -X DELETE http://localhost:8000/api/portfolios/4RCH3R/positions/AAPL
+```
+
+**Notes:**
+- `CASH` cannot be added, edited, or deleted via these endpoints (cash is managed by Excel upload or future deposit/withdraw endpoints).
+- The POST endpoint is an **upsert**: if the ticker exists, it replaces `shares` and `average_cost`; if not, it creates a new position.
+ - Average cost is set manually — the API does not automatically recalculate when you add shares; you must compute the weighted average yourself.
+
+## 💰 Cash Management
+
+You can deposit or withdraw cash directly from the dashboard using the **Deposit Cash** and **Withdraw Cash** buttons. These operations modify the special `CASH` position in your portfolio.
+
+### UI Actions
+
+- **Deposit Cash** — Click the green "💰 Deposit Cash" button to add funds.
+- **Withdraw Cash** — Click the orange "💸 Withdraw Cash" button to remove funds (cannot exceed available balance).
+
+### API
+
+**Deposit cash:**
+```bash
+curl -X POST http://localhost:8000/api/portfolios/4RCH3R/cash/deposit \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 5000}'
+```
+
+**Withdraw cash:**
+```bash
+curl -X POST http://localhost:8000/api/portfolios/4RCH3R/cash/withdraw \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 1000}'
+```
+
+**Notes:**
+- Amount must be a positive number.
+- Withdrawals fail if insufficient cash is available.
+- The `CASH` position has `average_cost: 1.0` (not used in calculations).
+- Cash balance is included in total portfolio value.
 
 ## 🗄️ Database Schema
 

@@ -4,9 +4,18 @@ import httpx
 import json
 import pandas as pd
 import yfinance as yf
+import re
 
 # Import the db instance verified in database.py
-from database import db
+try:
+    from .database import db
+except ImportError:
+    from database import db
+
+try:
+    from .search import web_search_cached
+except ImportError:
+    from search import web_search_cached
 
 router = APIRouter()
 
@@ -42,6 +51,54 @@ def _to_float(value, default=0.0):
 def _safe_collection_name(portfolio_name: str) -> str:
     cleaned = "".join(ch if ch not in {".", "$", "\x00"} else "_" for ch in portfolio_name).strip()
     return cleaned or "portfolio"
+
+# Keywords/phrases that suggest a web search is helpful
+SEARCH_TRIGGERS = [
+    r'\b(current|latest|recent|today|now|this week|this month|202[4-6])\b',
+    r'\b(news|update|announcement|report)\b',
+    r'\b(price of \w+|stock \w+|market \w+|crypto \w+)\b',
+    r'\b(weather|forecast)\b',
+    r'\b(who is|what is|where is|how is|when is)\b',
+    r'\b(earnings|quarterly|revenue|dividend|split|ipo)\b',
+    r'\b(latest|analyst|forecast|search|web|internet)\b',
+]
+
+def should_trigger_search(message: str, threshold: int = 1) -> bool:
+    """
+    Heuristic: return True if message likely needs web search.
+    Simple OR-matching across trigger patterns (case-insensitive).
+    """
+    msg_lower = message.lower()
+    matches = sum(1 for pattern in SEARCH_TRIGGERS if re.search(pattern, msg_lower))
+    return matches >= threshold
+
+def _format_portfolio_summary(portfolio_id: str, positions: list) -> str:
+    """Create a concise text summary of a portfolio for AI context."""
+    cash_val = 0.0
+    holdings = []
+
+    for pos in positions:
+        ticker = pos.get("ticker", "")
+        shares = float(pos.get("shares", 0))
+        avg_cost = float(pos.get("average_cost", pos.get("avg_cost", 0)))
+
+        if ticker == "CASH":
+            cash_val = shares
+        else:
+            holdings.append(f"{ticker}: {shares:.0f} shares @ ${avg_cost:.2f}")
+
+    # Build summary string
+    summary = f"Portfolio '{portfolio_id}':\n"
+    summary += f"• Cash: ${cash_val:,.2f}\n"
+    summary += f"• Holdings ({len(holdings)} positions):\n"
+
+    if holdings:
+        for h in holdings:  # Show ALL positions (no limit)
+            summary += f"  - {h}\n"
+    else:
+        summary += "  (no stock holdings)\n"
+
+    return summary
 
 def _parse_portfolio_upload(upload_bytes: bytes):
     df = pd.read_excel(BytesIO(upload_bytes), header=None)
@@ -109,11 +166,51 @@ def _parse_portfolio_upload(upload_bytes: bytes):
 
     return portfolio_name, cash_value, stock_documents
 
-# AI Chat Configuration for LM Studio
-LM_STUDIO_API_URL = "http://localhost:1234/v1/chat/completions"
-AI_SYSTEM_PROMPT = "You are a helpful financial assistant. Provide concise, informative responses about investments, market analysis, and portfolio management."
+# AI Chat Configuration - supports both LM Studio and Ollama
+import os
 
-async def call_lm_studio(user_message: str) -> dict:
+LLM_BACKEND = os.getenv("LLM_BACKEND", "lmstudio").lower()
+LM_STUDIO_API_URL = os.getenv("LM_STUDIO_API_URL", "http://localhost:1234/v1/chat/completions")
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/v1/chat/completions")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+
+# Determine active API URL and model based on backend
+if LLM_BACKEND == "ollama":
+    AI_API_URL = OLLAMA_API_URL
+    AI_MODEL = OLLAMA_MODEL
+    AI_BACKEND_NAME = "Ollama"
+else:
+    AI_API_URL = LM_STUDIO_API_URL
+    AI_MODEL = "*"
+    AI_BACKEND_NAME = "LM Studio"
+
+AI_SYSTEM_PROMPT = """You are a helpful financial assistant with access to the user's portfolio data and/or web search results when provided.
+
+When portfolio context is included:
+- Analyze their holdings, allocations, and performance
+- Provide specific insights (e.g., diversification, concentration risk, P&L)
+- Suggest actionable improvements (rebalancing, profit-taking, tax considerations)
+- Answer questions about specific tickers, costs, or potential
+
+When web search results are included:
+- Use the provided search results to give current (from april of 2026 or later), factual information
+- Cite sources (e.g., "According to recent reports...") when referencing web data
+- Acknowledge if information may be time-sensitive or unverified
+- Prioritize recent and authoritative results when multiple sources conflict
+
+When both are included:
+- Blend portfolio analysis with current market context from web results
+- Distinguish between personal portfolio facts and general market information
+- Provide recommendations grounded in both the user's specific holdings and current conditions
+
+When no context is available:
+- Provide general investment education
+- Explain financial concepts
+- Offer hypothetical examples
+
+Keep responses concise, informative, and focused on the user's specific question."""
+
+async def call_ai_backend(user_message: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             headers = {
@@ -121,35 +218,34 @@ async def call_lm_studio(user_message: str) -> dict:
                 "Accept": "application/json"
             }
             
+            # Build payload compatible with both LM Studio and Ollama
+            # LM Studio accepts "*" for auto model selection; Ollama requires a specific model name
             payload = {
-                "model": "*",
+                "model": AI_MODEL,
                 "messages": [
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message}
                 ],
-                "temperature": 0.7,
                 "max_tokens": 1024,
             }
             
             response = await client.post(
-                LM_STUDIO_API_URL,
+                AI_API_URL,
                 headers=headers,
                 json=payload
             )
             
-            if not response.status_code == 200:
+            if response.status_code != 200:
                 error_text = response.text[:500] if response.text else "Unknown error"
                 raise HTTPException(
-                    status_code=response.status_code, 
-                    detail=f"LM Studio API error: {error_text}"
+                    status_code=response.status_code,
+                    detail=f"{AI_BACKEND_NAME} API error: {error_text}"
                 )
             
             return response.json()
             
-    except httpx.TimeoutError:
-        raise HTTPException(status_code=504, detail="AI service request timed out.")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to connect to LM Studio: {str(e)}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to connect to {AI_BACKEND_NAME} at {AI_API_URL}: {str(e)}")
 
 @router.get("/portfolios")
 @router.get("/portfolios/")
@@ -158,11 +254,15 @@ async def get_default_portfolio():
 
 @router.get("/portfolios/list")
 async def list_portfolio_names():
+    if db is None:
+        return {"portfolios": [], "warning": "Database disconnected"}
     collections = db.list_collection_names()
     return {"portfolios": [c for c in collections if not c.startswith("system.")]}
 
 @router.post("/portfolios/upload")
 async def upload_portfolio(file: UploadFile = File(...)):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — cannot upload portfolio")
     try:
         upload_bytes = await file.read()
         portfolio_name, cash_value, stock_documents = _parse_portfolio_upload(upload_bytes)
@@ -196,6 +296,8 @@ async def upload_portfolio(file: UploadFile = File(...)):
 
 @router.get("/portfolios/{portfolio_id}")
 async def get_portfolio(portfolio_id: str):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
     try:
         positions_col = db[portfolio_id]
         user_positions = list(positions_col.find({}, {"_id": 0}))
@@ -271,56 +373,240 @@ async def get_portfolio(portfolio_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
+# Portfolio Management
+# ============================================
+
+@router.delete("/portfolios/{portfolio_id}")
+async def delete_portfolio(portfolio_id: str):
+    """Delete an entire portfolio collection."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    
+    collection_name = _safe_collection_name(portfolio_id)
+    if collection_name not in db.list_collection_names():
+        raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
+    
+    # Drop the entire collection
+    db[collection_name].drop()
+    
+    return {"message": f"Portfolio '{portfolio_id}' deleted successfully"}
+
+
+# ============================================
+# Position Management Endpoints
+# ============================================
+
+@router.delete("/portfolios/{portfolio_id}/positions/{ticker}")
+async def remove_position(portfolio_id: str, ticker: str):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    
+    ticker_upper = ticker.strip().upper()
+    if ticker_upper == "CASH":
+        raise HTTPException(status_code=400, detail="Cannot delete CASH position")
+    
+    collection = db[_safe_collection_name(portfolio_id)]
+    result = collection.delete_one({"ticker": ticker_upper})
+    
+    return {
+        "message": "Position removed",
+        "ticker": ticker_upper,
+        "deleted_count": result.deleted_count
+    }
+
+@router.post("/portfolios/{portfolio_id}/positions")
+async def add_position(portfolio_id: str, request: dict):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    
+    ticker = request.get("ticker", "").strip().upper()
+    shares = request.get("shares")
+    avg_cost = request.get("average_cost")
+    
+    if not ticker or ticker == "CASH":
+        raise HTTPException(status_code=400, detail="Invalid ticker")
+    if shares is None or shares <= 0:
+        raise HTTPException(status_code=400, detail="Shares must be a positive number")
+    if avg_cost is None or avg_cost < 0:
+        raise HTTPException(status_code=400, detail="Average cost required and must be non-negative")
+    
+    collection = db[_safe_collection_name(portfolio_id)]
+    
+    # Upsert: replace or insert
+    collection.update_one(
+        {"ticker": ticker},
+        {"$set": {
+            "ticker": ticker,
+            "shares": float(shares),
+            "average_cost": float(avg_cost),
+        }},
+        upsert=True
+    )
+    
+    return {
+        "ticker": ticker,
+        "shares": shares,
+        "average_cost": avg_cost,
+        "message": "Position added/updated"
+    }
+
+# ============================================
+# Cash Management Endpoints
+# ============================================
+
+@router.post("/portfolios/{portfolio_id}/cash/deposit")
+async def deposit_cash(portfolio_id: str, request: dict):
+    """Add cash to the portfolio's CASH position."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    
+    amount = request.get("amount")
+    if amount is None:
+        raise HTTPException(status_code=400, detail="Amount is required")
+    try:
+        amount_val = float(amount)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Amount must be a number")
+    
+    if amount_val <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be a positive number")
+    
+    collection = db[_safe_collection_name(portfolio_id)]
+    
+    # Atomic increment to avoid race conditions
+    # Use $inc to safely add cash even if document doesn't exist yet (upsert)
+    result = collection.update_one(
+        {"ticker": "CASH"},
+        {"$inc": {"shares": amount_val}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
+        upsert=True
+    )
+    
+    # Fetch the new cash value
+    cash_doc = collection.find_one({"ticker": "CASH"})
+    new_cash = float(cash_doc.get("shares", 0)) if cash_doc else amount_val
+    
+    return {"message": "Cash deposited", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
+
+
+@router.post("/portfolios/{portfolio_id}/cash/withdraw")
+async def withdraw_cash(portfolio_id: str, request: dict):
+    """Remove cash from the portfolio's CASH position."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    
+    amount = request.get("amount")
+    if amount is None:
+        raise HTTPException(status_code=400, detail="Amount is required")
+    try:
+        amount_val = float(amount)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Amount must be a number")
+    
+    if amount_val <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be a positive number")
+    
+    collection = db[_safe_collection_name(portfolio_id)]
+    
+    # Check current cash balance first
+    cash_doc = collection.find_one({"ticker": "CASH"})
+    if not cash_doc:
+        raise HTTPException(status_code=404, detail="No CASH position found — deposit first")
+    
+    current_cash = float(cash_doc.get("shares", 0))
+    if current_cash < amount_val:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Available: ${current_cash:,.2f}")
+    
+    # Atomic decrement
+    result = collection.update_one(
+        {"ticker": "CASH"},
+        {"$inc": {"shares": -amount_val}}
+    )
+    
+    # Fetch updated cash
+    updated_doc = collection.find_one({"ticker": "CASH"})
+    new_cash = float(updated_doc.get("shares", 0)) if updated_doc else 0
+    
+    return {"message": "Cash withdrawn", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
+
+
+# ============================================
 # AI Chat Endpoint
 # ============================================
 @router.post("/chat")
 async def ai_chat(request: dict):
     """
-    AI Chat endpoint - connects to LM Studio for intelligent responses.
-    
+    AI Chat endpoint — connects to LM Studio with optional portfolio context and web search.
+
     Expected payload:
     {
         "message": "Your question here",
-        "context": "Optional portfolio context"  // optional
+        "portfolio_id": "portfolio_name",  # optional
+        "use_web_search": true             # optional, defaults to true
     }
     """
     try:
-        # Extract message from request
         user_message = request.get("message", "").strip()
-        
+        portfolio_id = request.get("portfolio_id", "").strip()
+        use_web_search = request.get("use_web_search", True)  # default True per user pref
+
         if not user_message:
             raise HTTPException(status_code=400, detail="Message is required")
-        
-        # Get optional context to enhance response
-        context = request.get("context", "")
-        
-        # Build enhanced prompt with context if available
-        if context:
-            enhanced_prompt = f"Context: {context}\n\nQuestion: {user_message}"
+
+        # --- Fetch portfolio context if portfolio_id provided ---
+        portfolio_context = ""
+        if portfolio_id:
+            if db is None:
+                portfolio_context = "(Note: Portfolio data unavailable — database disconnected)"
+            else:
+                try:
+                    positions_col = db[portfolio_id]
+                    user_positions = list(positions_col.find({}, {"_id": 0}))
+                    if user_positions:
+                        portfolio_context = _format_portfolio_summary(portfolio_id, user_positions)
+                except Exception as e:
+                    print(f"Warning: Could not fetch portfolio '{portfolio_id}': {e}")
+                    portfolio_context = f"(Note: Portfolio '{portfolio_id}' data could not be loaded)"
+
+        # --- Fetch web search results if enabled and triggered ---
+        web_search_results = ""
+        web_search_used = False
+        if use_web_search and should_trigger_search(user_message):
+            try:
+                web_search_results = web_search_cached(user_message, max_results=5)
+                web_search_used = bool(web_search_results)
+            except Exception as e:
+                print(f"Web search skipped (error): {e}")
+
+        # --- Build final prompt with both portfolio + web context ---
+        context_parts = []
+        if portfolio_context:
+            context_parts.append(portfolio_context)
+        if web_search_results:
+            context_parts.append(f"Web Search Results:\n{web_search_results}")
+
+        if context_parts:
+            enhanced_prompt = "\n\n".join(context_parts) + f"\n\nUser question: {user_message}"
         else:
             enhanced_prompt = user_message
-        
-        print(f"Sending to LM Studio: {enhanced_prompt[:100]}...")
-        
-        # Call LM Studio API
-        result = await call_lm_studio(enhanced_prompt)
-        
-        # Extract response from AI
+
+        print(f"Sending to {AI_BACKEND_NAME} (context length: {len(enhanced_prompt)} chars)...")
+
+        # Call the selected AI backend (LM Studio or Ollama)
+        result = await call_ai_backend(enhanced_prompt)
+
         if "choices" not in result or len(result["choices"]) == 0:
-            raise HTTPException(status_code=502, detail="Invalid response format from LM Studio")
-        
+            raise HTTPException(status_code=502, detail=f"Invalid response format from {AI_BACKEND_NAME}")
+
         ai_response = result["choices"][0]["message"]["content"]
-        
-        # Log token usage if available
-        usage = result.get("usage", {})
-        if usage:
-            print(f"Token usage: input={usage.get('prompt_tokens', 0)}, output={usage.get('completion_tokens', 0)}")
-        
+
         return {
             "response": ai_response,
             "model": result.get("model", "unknown"),
+            "backend": AI_BACKEND_NAME,
+            "portfolio_context_included": bool(portfolio_context),
+            "web_search_used": web_search_used,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

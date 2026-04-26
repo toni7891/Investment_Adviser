@@ -14,6 +14,7 @@ customtkinter==5.2.2
 darkdetect==0.8.0
 dnspython==2.8.0
 dotenv==0.9.9
+ddgs>=0.10.0  # duckduckgo_search renamed to ddgs
 et_xmlfile==2.0.0
 fastapi==0.136.0
 frozendict==2.4.7
@@ -23,6 +24,7 @@ httpx==0.28.1
 idna==3.13
 iniconfig==2.3.0
 Jinja2==3.0.1
+lxml==6.1.0
 markdown-it-py==4.0.0
 MarkupSafe==2.0.1
 mdurl==0.1.2
@@ -36,6 +38,7 @@ peewee==4.0.4
 pillow==12.2.0
 platformdirs==4.9.6
 pluggy==1.6.0
+primp==1.2.3
 protobuf==7.34.1
 pycparser==3.0
 pydantic==2.13.3

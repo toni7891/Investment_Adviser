@@ -34,7 +34,7 @@
                 </div>
             </section>
 
-            <section class="portfolio-section glass-panel">
+            <section class="portfolio-section">
                 <div class="section-header">
                                     <div>
                                         <span class="section-label">Available portfolios</span>
@@ -96,6 +96,11 @@
             <!-- Holdings Table -->
             <section class="holdings-section">
                 <h2>Holdings</h2>
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; justify-content: center;">
+                    <button id="addPositionBtn" class="btn btn-primary">+ Add Stock</button>
+                    <button id="depositCashBtn" class="btn btn-cash">💰 Deposit Cash</button>
+                    <button id="withdrawCashBtn" class="btn btn-cash btn-cash--withdraw">💸 Withdraw Cash</button>
+                </div>
                 <div class="holdings-table-container">
                     <table class="holdings-table">
                         <thead>
@@ -106,6 +111,7 @@
                                 <th>Value</th>
                                 <th>Day %</th>
                                 <th>Total PnL</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="holdingsBody">
@@ -123,6 +129,11 @@
                             <p>Hello! I'm your AI investment strategist. Ask me about your portfolio or market insights.</p>
                         </div>
                     </div>
+                    <!-- Web Search Toggle -->
+                    <div class="web-search-toggle">
+                        <input type="checkbox" id="webSearchToggle" checked>
+                        <span class="toggle-label">Include web search</span>
+                    </div>
                     <div class="chat-input-area">
                         <input type="text" id="chatInput" placeholder="Ask the AI strategist...">
                         <button id="sendButton">Send</button>
@@ -138,7 +149,7 @@
                 <span class="status-value" id="mongoStatus">Connecting...</span>
             </div>
             <div class="status-item">
-                <span class="status-label">Ollama:</span>
+                <span class="status-label">AI Backend:</span>
                 <span class="status-value" id="ollamaStatus">Connecting...</span>
             </div>
             <div class="status-item">
@@ -146,6 +157,48 @@
                 <span class="status-value" id="currentPortfolio">--</span>
             </div>
         </footer>
+    </div>
+
+    <!-- Add/Edit Position Modal -->
+    <div id="positionModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modalTitle">Add Position</h3>
+            <form id="positionForm">
+                <div class="form-group">
+                    <label for="tickerInput">Ticker</label>
+                    <input type="text" id="tickerInput" placeholder="AAPL" required maxlength="10">
+                </div>
+                <div class="form-group">
+                    <label for="sharesInput">Shares</label>
+                    <input type="number" id="sharesInput" step="0.01" min="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="costInput">Average Cost ($)</label>
+                    <input type="number" id="costInput" step="0.01" min="0" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cash Modal -->
+    <div id="cashModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="cashModalTitle">Cash Operation</h3>
+            <form id="cashForm">
+                <div class="form-group">
+                    <label for="cashAmountInput">Amount ($)</label>
+                    <input type="number" id="cashAmountInput" step="0.01" min="0.01" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cashCancelBtn">Cancel</button>
+                    <button type="submit" class="btn-primary" id="cashSubmitBtn">Deposit</button>
+                </div>
+            </form>
+        </div>
     </div>
 
         <!-- Main application logic -->

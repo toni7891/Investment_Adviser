@@ -1,0 +1,32 @@
+/Users/tonyverin/Desktop/investment_manager/backend/main.py:26: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/Users/tonyverin/Desktop/investment_manager/backend/main.py:30: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+INFO:     Started server process [93365]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+✅ MongoDB connection established
+Backend server starting up...
+INFO:     127.0.0.1:52724 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52726 - "GET /api/portfolios/list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52730 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52732 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52743 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52743 - "GET /static/app.js?v=3.5 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52791 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52791 - "GET /static/style.css?v=3.4 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52792 - "GET /static/app.js?v=3.5 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52831 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52831 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52831 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
