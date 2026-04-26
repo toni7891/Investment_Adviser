@@ -142,6 +142,7 @@ Consider upgrading to Tavily or Brave Search APIs for higher reliability, richer
 - **Dynamic Portfolio Metrics:** Automatic calculation of Total Balance, Invested Value, Cash, Total Profit, and Daily Change (%).
 - **Interactive Visuals:** Responsive dashboard featuring color-coded performance indicators for instant visual feedback.
 - **Multi-Portfolio Support:** Ability to switch between different asset collections stored in MongoDB.
+- **Portfolio Management:** Create, edit, and delete portfolios directly from the dashboard.
 - **AI Strategist Panel:** Built-in integration with LM Studio for portfolio analysis and AI-powered insights.
 - **Excel Upload Support:** Upload portfolio data via Excel template with intelligent parsing.
 
@@ -349,6 +350,15 @@ curl -X POST http://localhost:8000/api/portfolios/4RCH3R/cash/withdraw \
 - Withdrawals fail if insufficient cash is available.
 - The `CASH` position has `average_cost: 1.0` (not used in calculations).
 - Cash balance is included in total portfolio value.
+
+### Delete Portfolio
+
+**From the Landing Page**, hover over a portfolio card and click the trash icon that appears in the top-right corner. Confirm the deletion in the dialog. The portfolio and all its positions are permanently removed.
+
+**API:**
+```bash
+curl -X DELETE http://localhost:8000/api/portfolios/PORTFOLIO_NAME
+```
 
 ## 🗄️ Database Schema
 

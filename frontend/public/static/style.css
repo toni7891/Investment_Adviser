@@ -1034,11 +1034,16 @@ tr:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.portfolio-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--ai-blue);
-    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.18);
-}
+ .portfolio-card:hover {
+     transform: translateY(-2px);
+     border-color: var(--ai-blue);
+     box-shadow: 0 8px 24px rgba(59, 130, 246, 0.18);
+ }
+ 
+ .portfolio-card:focus {
+     outline: 2px solid var(--ai-blue);
+     outline-offset: 2px;
+ }
 
 .portfolio-card__title {
     font-size: 1.25rem;
@@ -1056,31 +1061,56 @@ tr:hover {
 /* Delete button on portfolio card */
 .portfolio-card__delete {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    padding: 0;
+    top: 6px;
+    right: 6px;
+    height: 32px;
+    padding: 0 12px;
     border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 1rem;
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--danger-red);
+    font-size: 0.85rem;
+    font-weight: 600;
     cursor: pointer;
-    border-radius: 6px;
-    opacity: 0;
+    border-radius: 16px;
+    opacity: 0.4;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    z-index: 2;
+    white-space: nowrap;
 }
 
 .portfolio-card:hover .portfolio-card__delete {
     opacity: 1;
+    background: rgba(239, 68, 68, 0.15);
+    padding-right: 14px;
 }
 
 .portfolio-card__delete:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--danger-red);
+    background: var(--danger-red);
+    color: white;
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.portfolio-card__delete:active {
+    transform: scale(0.97);
+}
+
+/* Hide label by default; show on parent hover */
+.portfolio-card__delete .delete-label {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.portfolio-card:hover .portfolio-card__delete .delete-label {
+    max-width: 60px;
+    opacity: 1;
+    margin-left: 2px;
 }
 
 .portfolio-card--empty {

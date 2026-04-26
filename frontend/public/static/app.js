@@ -312,16 +312,80 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       names.forEach((name) => {
-        const btn = document.createElement("button");
-        btn.className = "portfolio-card";
-        btn.innerHTML = `<div class="portfolio-card__title">${name}</div><div class="portfolio-card__meta">Open portfolio</div>`;
-        btn.addEventListener("click", () => {
+        const card = document.createElement("div");
+        card.className = "portfolio-card";
+        card.setAttribute("role", "button");
+        card.setAttribute("tabindex", "0");
+        card.innerHTML = `
+          <div class="portfolio-card__title">${name}</div>
+          <div class="portfolio-card__meta">Open portfolio</div>
+          <button class="portfolio-card__delete" data-name="${name}" title="Delete portfolio" aria-label="Delete portfolio">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-2 14H7L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4h6v2"></path>
+            </svg>
+            <span class="delete-label">Delete</span>
+          </button>
+        `;
+
+        // Open portfolio on card click (ignore clicks on delete button)
+        card.addEventListener("click", (e) => {
+          if (e.target.closest(".portfolio-card__delete")) return;
           currentPortfolioId = name;
           if (portfolioTitle) portfolioTitle.textContent = name;
           showDashboard();
           loadSummary();
         });
-        portfolioList.appendChild(btn);
+
+        // Keyboard: Enter/Space to open
+        card.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            currentPortfolioId = name;
+            if (portfolioTitle) portfolioTitle.textContent = name;
+            showDashboard();
+            loadSummary();
+          }
+        });
+
+        // Delete button handler
+        const deleteBtn = card.querySelector(".portfolio-card__delete");
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete portfolio "${name}"? This cannot be undone.`)) return;
+
+          try {
+            const response = await fetch(`/api/portfolios/${encodeURIComponent(name)}`, {
+              method: "DELETE"
+            });
+
+            if (response.ok) {
+              // Remove card from DOM with fade effect
+              card.style.opacity = "0";
+              card.style.transform = "scale(0.9)";
+              setTimeout(() => card.remove(), 200);
+              showToast(`Portfolio "${name}" deleted`, "success");
+
+              // If current open portfolio was deleted, go back to landing
+              if (currentPortfolioId === name) {
+                currentPortfolioId = null;
+                showLanding();
+                loadPortfolios();
+              }
+            } else {
+              const err = await response.json().catch(() => ({}));
+              showToast(err.detail || "Failed to delete portfolio", "error");
+            }
+          } catch (err) {
+            console.error("Delete portfolio error:", err);
+            showToast("Network error while deleting", "error");
+          }
+        });
+
+        portfolioList.appendChild(card);
       });
     } catch (err) {
       console.error("Load Portfolios Error:", err);

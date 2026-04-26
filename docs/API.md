@@ -246,7 +246,7 @@ Permanently deletes the portfolio's MongoDB collection.
 **Response 200:**
 ```json
 {
-  "message": "Collection 'PORTFOLIO' deleted successfully"
+  "message": "Portfolio '4RCH3R' deleted successfully"
 }
 ```
 

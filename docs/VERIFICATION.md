@@ -159,6 +159,23 @@ Use this checklist to manually verify all bug fixes and features are working cor
 
 ---
 
+### 11. Delete Portfolio
+
+**Steps:**
+1. From the landing page, create two portfolios (e.g., "DELETE_ME" and "KEEP_ME").
+2. Hover over the "DELETE_ME" card — verify a red trash icon appears in the top-right corner.
+3. Click the trash icon.
+4. Confirm the deletion in the browser dialog.
+5. Verify the card disappears with a fade-out animation.
+6. Verify a success toast appears: `Portfolio "DELETE_ME" deleted`.
+7. Verify "KEEP_ME" remains.
+8. Open the API or MongoDB — confirm the collection is gone.
+9. If you delete the currently open portfolio (navigate to it first, then back to landing and delete), verify you're returned to the landing page automatically.
+
+**Expected:** Delete works instantly; no page reload needed; DB collection removed.
+
+---
+
 ## ✅ Performance & Stability
 
 ### 11. No 502 Errors on AI Chat (with portfolio)

@@ -17,22 +17,37 @@ from fastapi.testclient import TestClient
 
 
 def get_test_client():
-    """Create a TestClient with database mocked."""
+    """Create a TestClient with database mocked using mongomock."""
+    import sys
     import mongomock
-    from unittest.mock import patch, MagicMock
-    from backend.main import app
+    from unittest.mock import MagicMock
+    from fastapi.testclient import TestClient
 
+    # Create a fresh in-memory DB for this test
     mock_db = mongomock.MongoClient().investment_app
 
-    with patch('backend.database.db', mock_db), \
-         patch('backend.database.client', MagicMock()):
-        # Reload routes to pick up patched db
-        import importlib
-        import backend.routes as routes_mod
-        importlib.reload(routes_mod)
+    # Patch backend.database globals BEFORE any imports that use them
+    import backend.database
+    backend.database.db = mock_db
+    backend.database.client = MagicMock()
 
-        client = TestClient(app)
-        return client, mock_db
+    # Now import the app (which will import routes and pick up patched db)
+    from backend.main import app
+
+    # Also ensure the routes module (whether top-level 'routes' or 'backend.routes') uses mock_db
+    # main.py imports routes after adding backend/ to sys.path, typically as top-level 'routes'
+    if 'routes' in sys.modules:
+        routes_mod = sys.modules['routes']
+        routes_mod.db = mock_db
+    # Also patch backend.routes if it exists separately
+    try:
+        import backend.routes
+        backend.routes.db = mock_db
+    except ImportError:
+        pass
+
+    client = TestClient(app)
+    return client, mock_db
 
 
 def test_status_endpoint():

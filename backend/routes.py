@@ -363,8 +363,13 @@ async def upload_portfolio(file: UploadFile = File(...)):
 async def get_portfolio(portfolio_id: str):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
+
+    collection_name = _safe_collection_name(portfolio_id)
+    if collection_name not in db.list_collection_names():
+        raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
+
     try:
-        positions_col = db[_safe_collection_name(portfolio_id)]
+        positions_col = db[collection_name]
         user_positions = list(positions_col.find({}, {"_id": 0}))
 
         invested_val = 0
