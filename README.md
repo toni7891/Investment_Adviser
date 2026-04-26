@@ -1,6 +1,6 @@
 # 4RCH3R | Investment Portfolio Dashboard
 
-A real-time investment tracking application built with **FastAPI**, **MongoDB**, and **React/TypeScript**. This dashboard aggregates financial data from MongoDB and enriches it with live market data via Yahoo Finance to provide an interactive overview of your net worth, profit/loss, and daily performance.
+A real-time investment tracking application built with **FastAPI**, **MongoDB**. This dashboard aggregates financial data from MongoDB and enriches it with live market data via Yahoo Finance to provide an interactive overview of your net worth, profit/loss, and daily performance.
 
 ---
 
