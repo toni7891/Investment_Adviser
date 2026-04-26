@@ -138,13 +138,13 @@ Consider upgrading to Tavily or Brave Search APIs for higher reliability, richer
 
 ## 🚀 Features
 
-- **Live Market Tracking:** Integrated with `yfinance` for real-time price updates and bulk-fetch optimization.
-- **Dynamic Portfolio Metrics:** Automatic calculation of Total Balance, Invested Value, Cash, Total Profit, and Daily Change (%).
+- **Live Market Tracking:** Integrated with `yfinance` for real-time price updates and bulk-fetch optimization. Invalid/delisted tickers handled gracefully.
+- **Dynamic Portfolio Metrics:** Automatic calculation of Total Balance, Invested Value, Cash, Total Profit, and Daily Change (%). Holdings sorted by best performer first.
 - **Interactive Visuals:** Responsive dashboard featuring color-coded performance indicators for instant visual feedback.
 - **Multi-Portfolio Support:** Ability to switch between different asset collections stored in MongoDB.
-- **Portfolio Management:** Create, edit, and delete portfolios directly from the dashboard.
-- **AI Strategist Panel:** Built-in integration with LM Studio for portfolio analysis and AI-powered insights.
-- **Excel Upload Support:** Upload portfolio data via Excel template with intelligent parsing.
+- **Portfolio Management:** Create, edit, and delete portfolios directly from the dashboard. Delete button appears on each portfolio card.
+- **AI Strategist Panel:** Built-in integration with LM Studio for portfolio analysis and AI-powered insights. Portfolio context is automatically included when available.
+- **Excel Upload Support:** Upload portfolio data via Excel template with robust header parsing. Invalid ticker symbols are rejected with clear error messages.
 
 ## 🛠️ Tech Stack
 
@@ -233,6 +233,7 @@ The server starts at `http://127.0.0.1:8000`. Navigate to the dashboard.
 | `DELETE` | `/api/portfolios/{portfolio_id}/positions/{ticker}` | Remove a stock position |
 | `POST` | `/api/portfolios/{portfolio_id}/cash/deposit` | Deposit cash into portfolio |
 | `POST` | `/api/portfolios/{portfolio_id}/cash/withdraw` | Withdraw cash from portfolio |
+| `DELETE` | `/api/portfolios/{portfolio_id}` | **Delete an entire portfolio** (all positions removed) |
 
 ### Portfolio Response Schema
 
@@ -279,13 +280,19 @@ Portfolios can be uploaded via an Excel file. The expected format:
 | `4` | `stock ticker` | `num of shares` | `avg price` |
 | `5+` | `<TICKER>` | `<shares>` | `<average_cost>` |
 
-**Notes:**
-- Header row (row 4) column names are case-insensitive (`stock ticker`, `num of shares`, `avg price`).
-- Ticker symbols are converted to uppercase automatically.
-- Cash row must use `cash` as the label.
-- Any number of stock rows can follow the header.
+**Header row (row 4) accepted formats:**
+- Column A: `ticker`, `symbol`, `stock` (any containing these words)
+- Column B: `shares`, `quantity`, `qty`, `count`, `num`
+- Column C: `avg price`, `average cost`, `cost`, `price`
 
-Example template: [`investment_tamplate.xlsx`](investment_tamplate.xlsx) in the project root.
+**Notes:**
+- Header column names are **case-insensitive** and can contain spaces or underscores (e.g., "stock ticker", "num_of_shares", "avg_price").
+- Ticker symbols in data rows are converted to uppercase automatically.
+- Cash row (row 2) must use `cash` as the first-column label.
+- Any number of stock rows can follow the header (row 5 onward).
+- Invalid ticker symbols (e.g., typos like "APPL" instead of "AAPL") are **rejected** with a clear error — the portfolio is not created/updated.
+
+**Example template:** [`investment_template.xlsx`](investment_template.xlsx) in the project root.
 
 To use: POST the `.xlsx` file to `/api/portfolios/upload` via the dashboard UI or API client.
 
@@ -295,9 +302,9 @@ The dashboard allows you to add, edit, or remove individual stock positions with
 
 ### UI Actions
 
-- **Add Stock** — Click the `+ Add Stock` button above the holdings table to open a modal. Enter ticker, shares, and average cost.
-- **Edit Position** — Click the ✏️ icon on any row to modify shares or average cost (ticker cannot be changed).
-- **Remove Position** — Click the 🗑️ icon on any row to delete that holding (except CASH, which is protected).
+- **Add Stock** — Click the `+ Add Stock` button above the holdings table to open a modal. Enter ticker, shares, and average cost. Invalid tickers (e.g., "APPL" instead of "AAPL") are rejected with a clear error message.
+- **Edit Position** — Click the pencil icon on any row to modify shares or average cost (ticker cannot be changed).
+- **Remove Position** — Click the trash icon on any row to delete that holding (except CASH, which is protected).
 
 After any change, the portfolio metrics (total balance, P&L, etc.) refresh automatically.
 
@@ -351,13 +358,25 @@ curl -X POST http://localhost:8000/api/portfolios/4RCH3R/cash/withdraw \
 - The `CASH` position has `average_cost: 1.0` (not used in calculations).
 - Cash balance is included in total portfolio value.
 
-### Delete Portfolio
+## 🗑️ Deleting Portfolios
 
-**From the Landing Page**, hover over a portfolio card and click the trash icon that appears in the top-right corner. Confirm the deletion in the dialog. The portfolio and all its positions are permanently removed.
+You can permanently delete a portfolio from the landing page.
 
-**API:**
+### UI
+
+Hover over a portfolio card and click the red **Delete** button that appears in the top-right corner. Confirm the dialog — the card fades out and the portfolio is removed from MongoDB.
+
+### API
+
 ```bash
 curl -X DELETE http://localhost:8000/api/portfolios/PORTFOLIO_NAME
+```
+
+**Response:**
+```json
+{
+  "message": "Portfolio 'PORTFOLIO_NAME' deleted successfully"
+}
 ```
 
 ## 🗄️ Database Schema

@@ -14,8 +14,6 @@ http://localhost:8000
 
 ## Health & Frontend
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
 | `GET` | `/` | Serves the dashboard frontend (HTML) |
 | `GET` | `/status` | Returns `{"status": "online"}` — health check |
 
@@ -106,10 +104,12 @@ Upload an Excel file to create or update a portfolio.
 **Excel format:**
 | Row | Column A | Column B | Column C |
 |-----|----------|----------|----------|
-| 0 | `Portfolio Name` | `<name>` | — |
-| 2 | `Cash` | `<cash_amount>` | — |
-| 4 | `Ticker` | `Shares` | `Avg Cost` |
-| 5+ | `AAPL` | `10` | `150.00` |
+| `0` | `Portfolio Name` or `portfolio name:` | `<name>` | — |
+| `2` | `Cash` | `<cash_amount>` | — |
+| `4` | `Ticker` / `Symbol` / `Stock` | `Shares` / `Quantity` / `Qty` | `Avg Cost` / `Average Price` |
+| `5+` | `<TICKER>` | `<shares>` | `<average_cost>` |
+
+Column headers (row 4) are flexible — they can contain the keywords above in any order, with spaces, underscores, or mixed case. Examples: `"stock ticker"`, `"num_of_shares"`, `"avg_price"` all work.
 
 **Response 200:**
 ```json

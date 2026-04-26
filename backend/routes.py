@@ -118,50 +118,85 @@ def _parse_portfolio_upload(upload_bytes: bytes):
     portfolio_name = _last_non_empty_value(df.iloc[0]) or "portfolio"
     cash_value = _to_float(_last_non_empty_value(df.iloc[2]), default=0.0)
 
-    stock_table = df.iloc[5:].copy()
+    # Row 4 (index 4) is the expected header row
+    header_row_index = 4
+    stock_table = df.iloc[5:].copy()  # rows 5+ are data
     stock_documents = []
 
     if not stock_table.empty:
-        first_row = stock_table.iloc[0].tolist()
-        normalized_first_row = [_normalize_header(value) for value in first_row]
+        # Build column index mapping from header row (if present and valid)
+        if header_row_index < len(df):
+            header_values = df.iloc[header_row_index].tolist()
+            normalized_header = [_normalize_header(v) for v in header_values]
 
-        header_candidates = {"ticker", "symbol", "shares", "average_cost", "avg_cost", "averagecost"}
-        has_header_row = any(value in header_candidates for value in normalized_first_row)
+            # Check if header row contains recognizable column names using substring matching
+            def header_contains(keywords: set) -> bool:
+                return any(
+                    any(kw in col_name for kw in keywords)
+                    for col_name in normalized_header
+                )
 
-        if has_header_row:
-            stock_table = stock_table.iloc[1:].copy()
-            stock_table.columns = normalized_first_row
+            has_ticker_col = header_contains({"ticker", "symbol", "stock"})
+            has_shares_col = header_contains({"share", "qty", "quantity", "count"})
+            has_cost_col = header_contains({"cost", "avg", "average", "price"})
+
+            # Require ticker plus at least one numeric column to treat as a valid header
+            has_valid_header = has_ticker_col and (has_shares_col or has_cost_col)
+
+            if has_valid_header:
+                # Use header row as column names
+                stock_table.columns = normalized_header
+                # Drop any completely empty columns
+                stock_table = stock_table.dropna(axis=1, how='all')
+                # Rows already start at iloc[5]; header consumed as column names
+            else:
+                # No useful header — use positional column names
+                stock_table.columns = [f"col_{i}" for i in range(stock_table.shape[1])]
         else:
-            stock_table.columns = [f"col_{index}" for index in range(stock_table.shape[1])]
+            # Header row out of bounds — fallback to positional
+            stock_table.columns = [f"col_{i}" for i in range(stock_table.shape[1])]
+
+        # Normalize all column names to lowercase strings
+        stock_table.columns = [str(c).lower() for c in stock_table.columns]
+
+        # Build normalized column index mapping (if header provided)
+        header_map = {}
+        if has_valid_header:
+            for col in stock_table.columns:
+                if "ticker" in col or "symbol" in col or "stock" in col:
+                    header_map["ticker"] = col
+                if "share" in col:
+                    header_map["shares"] = col
+                if "cost" in col or "avg" in col or "price" in col:
+                    header_map["average_cost"] = col
 
         for _, row in stock_table.iterrows():
-            row_values = [_clean_text(value) for value in row.tolist()]
-            row_values = [value for value in row_values if value != ""]
-            if not row_values:
+            row_values = [_clean_text(v) for v in row.tolist()]
+            if all(v == "" for v in row_values):
                 continue
 
-            if has_header_row:
+            if has_valid_header and header_map:
                 ticker = _clean_text(
-                    row.get("ticker")
-                    or row.get("symbol")
-                    or row.get("stock")
-                    or row.get("col_0")
+                    row.get(header_map.get("ticker", "ticker")) if "ticker" in header_map else ""
                 )
-                shares = _to_float(row.get("shares", row.get("col_1", 0)), default=0.0)
+                shares = _to_float(
+                    row.get(header_map.get("shares", "shares"), 0), default=0.0
+                )
                 average_cost = _to_float(
-                    row.get("average_cost", row.get("avg_cost", row.get("col_2", 0))),
-                    default=0.0,
+                    row.get(header_map.get("average_cost", "average_cost"), 0), default=0.0
                 )
             else:
-                ticker = _clean_text(row.iloc[0] if len(row) > 0 else "")
-                shares = _to_float(row.iloc[1] if len(row) > 1 else 0, default=0.0)
-                average_cost = _to_float(row.iloc[2] if len(row) > 2 else 0, default=0.0)
+                # Positional fallback — first 3 columns
+                vals = row_values[:3]
+                ticker = vals[0] if len(vals) > 0 else ""
+                shares = _to_float(vals[1] if len(vals) > 1 else 0, default=0.0)
+                average_cost = _to_float(vals[2] if len(vals) > 2 else 0, default=0.0)
 
             if not ticker:
                 continue
 
             ticker_upper = ticker.upper()
-            if ticker_upper in {"TICKER", "SYMBOL"}:
+            if ticker_upper in {"TICKER", "SYMBOL", "TICKER_SYMBOL"}:
                 continue
 
             stock_documents.append(
@@ -307,19 +342,18 @@ async def upload_portfolio(file: UploadFile = File(...)):
                 valid_tickers = set()
 
                 if isinstance(validation_data.columns, pd.MultiIndex):
-                    # Multiple tickers returned
+                    # MultiIndex: columns are (field, ticker). Extract per-ticker subframe.
                     for ticker in tickers_to_validate:
                         try:
-                            ticker_df = validation_data[ticker]
+                            ticker_df = validation_data.xs(ticker, axis=1, level=1)
                             if not ticker_df.empty and not pd.isna(ticker_df["Close"].iloc[-1]):
                                 valid_tickers.add(ticker)
                         except Exception:
                             pass
                 else:
-                    # Single ticker
-                    ticker = tickers_to_validate[0]
+                    # Single-ticker case
                     if not validation_data.empty and not pd.isna(validation_data["Close"].iloc[-1]):
-                        valid_tickers.add(ticker)
+                        valid_tickers.add(tickers_to_validate[0])
 
                 # Filter out invalid tickers
                 invalid_tickers = [doc for doc in stock_documents if doc["ticker"] not in valid_tickers]
@@ -328,8 +362,6 @@ async def upload_portfolio(file: UploadFile = File(...)):
                 if invalid_tickers:
                     invalid_names = [doc["ticker"] for doc in invalid_tickers]
                     print(f"[UPLOAD] Warning: Skipped invalid tickers: {invalid_names}")
-                    # Optionally could raise error instead of silently skipping:
-                    # raise HTTPException(400, f"Invalid tickers found: {', '.join(invalid_names)}")
 
             except Exception as e:
                 print(f"[UPLOAD] Ticker validation failed: {e}")
