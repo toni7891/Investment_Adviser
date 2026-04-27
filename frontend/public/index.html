@@ -1,224 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Investment Strategist Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=3.4">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4RCH3R · Investment Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=5.0">
 </head>
 <body>
-    <!-- Landing Page: Portfolio Selection -->
-    <div id="landing-page" class="page landing-page">
-        <div class="landing-shell">
-            <section class="landing-hero glass-panel">
-                <div class="landing-copy">
-                    <span class="landing-eyebrow">Portfolio Control Center</span>
-                    <h1>Investment Strategist</h1>
-                    <p class="subtitle">Select an existing portfolio or upload a new Excel template to create one instantly.</p>
-                </div>
 
-                <div class="upload-card glass-card" id="uploadDropZone">
-                    <div class="upload-card__icon" aria-hidden="true">⇪</div>
-                    <div class="upload-card__body">
-                        <h2>Upload Portfolio</h2>
-                        <p>Drop your Excel file here or choose a file to import holdings, cash, and portfolio metadata.</p>
-                    </div>
-                    <div class="upload-card__actions">
-                        <label id="uploadPortfolioButton" class="upload-btn" for="portfolioUpload" role="button" tabindex="0">Choose File</label>
-                        <input id="portfolioUpload" class="file-input" type="file" accept=".xlsx,.xls">
-                    </div>
-                    <div id="uploadProgress" class="upload-progress hidden" aria-live="polite">
-                        <span class="upload-spinner" aria-hidden="true"></span>
-                        <span class="upload-progress__text">Uploading portfolio...</span>
-                    </div>
-                </div>
-            </section>
+  <!-- ═══════════════════════════════════════════
+       LANDING PAGE
+  ═══════════════════════════════════════════ -->
+  <div id="landing-page" class="page">
 
-            <section class="portfolio-section">
-                <div class="section-header">
-                                    <div>
-                                        <span class="section-label">Available portfolios</span>
-                                        <h2>Select a portfolio to view</h2>
-                                    </div>
-                                </div>
+    <!-- Background system -->
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--a" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--b" aria-hidden="true"></div>
 
-                <div class="portfolio-list portfolio-grid" id="portfolioList">
-                    <p class="loading">Loading portfolios...</p>
-                </div>
-            </section>
+    <div class="landing-wrap">
+
+      <!-- Hero -->
+      <header class="landing-hero">
+        <div class="hero-brand">
+          <div class="hero-mark" aria-hidden="true">
+            <span class="hero-mark__ring"></span>
+            <span class="hero-mark__glyph">◆</span>
+          </div>
+          <div class="hero-copy">
+            <p class="hero-eyebrow">STRATEGIST PLATFORM · v2.0</p>
+            <h1 class="hero-title">INVESTMENT TERMINAL</h1>
+          </div>
+        </div>
+        <div class="hero-meta">
+          <div class="hero-sys-status">
+            <span class="sys-dot"></span>
+            <span>SYSTEM ONLINE</span>
+          </div>
+          <div class="hero-clock" id="sysTime"></div>
+        </div>
+      </header>
+
+      <!-- Divider rule -->
+      <div class="hero-rule" aria-hidden="true">
+        <span class="rule-line"></span>
+        <span class="rule-center">◈</span>
+        <span class="rule-line"></span>
+      </div>
+
+      <!-- Body: Upload + Portfolios -->
+      <div class="landing-body">
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadDropZone">
+          <div class="upload-zone__header">
+            <span class="upload-zone__tag">// IMPORT DATA</span>
+            <span class="upload-zone__hint">XLSX · XLS</span>
+          </div>
+          <div class="upload-zone__inner">
+            <div class="upload-icon-box" aria-hidden="true">
+              <span class="upload-icon-arrow">↑</span>
+            </div>
+            <div class="upload-zone__copy">
+              <h3>Upload Portfolio</h3>
+              <p>Drag &amp; drop your Excel file here, or click below</p>
+            </div>
+            <label id="uploadPortfolioButton" class="btn-upload" for="portfolioUpload" role="button" tabindex="0">
+              CHOOSE FILE
+            </label>
+            <input id="portfolioUpload" type="file" accept=".xlsx,.xls" class="file-input">
+          </div>
+          <div id="uploadProgress" class="upload-progress hidden">
+            <span class="spinner"></span>
+            <span class="progress-label">PROCESSING…</span>
+          </div>
         </div>
 
-        <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+        <!-- Portfolios Panel -->
+        <div class="portfolio-panel">
+          <div class="panel-hdr">
+            <div>
+              <span class="panel-hdr__prefix">// </span>
+              <span class="panel-hdr__title">PORTFOLIOS</span>
+            </div>
+            <span id="portfolioCount" class="panel-count"></span>
+          </div>
+          <div id="portfolioList" class="portfolio-grid">
+            <p class="loading-state">Scanning collections…</p>
+          </div>
+        </div>
+
+      </div><!-- .landing-body -->
+    </div><!-- .landing-wrap -->
+  </div><!-- #landing-page -->
+
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD PAGE
+  ═══════════════════════════════════════════ -->
+  <div id="dashboard-page" class="page hidden">
+
+    <!-- Ticker Tape -->
+    <div class="ticker-tape" aria-hidden="true">
+      <div class="ticker-track">
+        <span class="tick tick--gain">SPY&nbsp;597.34&nbsp;▲&nbsp;+1.24%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">QQQ&nbsp;497.82&nbsp;▼&nbsp;−0.38%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">BTC/USD&nbsp;94,210&nbsp;▲&nbsp;+2.14%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--neutral">VIX&nbsp;16.42&nbsp;─&nbsp;0.00%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">NVDA&nbsp;876.32&nbsp;▲&nbsp;+3.22%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">TSLA&nbsp;247.12&nbsp;▼&nbsp;−1.44%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">AAPL&nbsp;203.48&nbsp;▲&nbsp;+0.87%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--neutral">GOLD&nbsp;2,341.50&nbsp;─&nbsp;+0.12%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">EUR/USD&nbsp;1.0821&nbsp;▼&nbsp;−0.19%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">AMZN&nbsp;189.25&nbsp;▲&nbsp;+0.65%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">MSFT&nbsp;421.10&nbsp;▲&nbsp;+1.08%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">META&nbsp;513.77&nbsp;▼&nbsp;−0.55%</span>
+        <span class="tick-sep">◆</span>
+        <span class="tick tick--gain">SPY&nbsp;597.34&nbsp;▲&nbsp;+1.24%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">QQQ&nbsp;497.82&nbsp;▼&nbsp;−0.38%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">BTC/USD&nbsp;94,210&nbsp;▲&nbsp;+2.14%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--neutral">VIX&nbsp;16.42&nbsp;─&nbsp;0.00%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">NVDA&nbsp;876.32&nbsp;▲&nbsp;+3.22%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--loss">TSLA&nbsp;247.12&nbsp;▼&nbsp;−1.44%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--gain">AAPL&nbsp;203.48&nbsp;▲&nbsp;+0.87%</span><span class="tick-sep">◆</span>
+        <span class="tick tick--neutral">GOLD&nbsp;2,341.50&nbsp;─&nbsp;+0.12%</span>
+      </div>
     </div>
 
-    <!-- Dashboard Page -->
-    <div id="dashboard-page" class="page hidden">
-        <!-- Top Header -->
-    <header class="header">
-        <div class="header-left">
-            <button id="backButton" class="back-btn">← Back</button>
+    <!-- Dashboard Header -->
+    <header class="dash-header">
+      <div class="hdr-left">
+        <button id="backButton" class="back-btn">← BACK</button>
+        <div class="port-ident">
+          <span class="port-label">PORTFOLIO</span>
+          <h2 id="portfolioTitle" class="port-name">──────</h2>
         </div>
+      </div>
 
-        <div class="portfolio-header-center">
-            <div class="portfolio-name">
-                <h1 id="portfolioTitle">4RCH3R</h1>
-            </div>
-            <div class="header-sub-labels">
-                <span class="label-invested">Invested: <strong id="investedAmount">$0.00</strong></span>
-                <span class="label-cash">Cash: <strong id="cashAmount">$0.00</strong></span>
-            </div>
+      <div class="hdr-minis">
+        <div class="mini-metric">
+          <span class="mini-lbl">INVESTED</span>
+          <strong id="investedAmount" class="mini-val">$0.00</strong>
         </div>
+        <div class="mini-divider"></div>
+        <div class="mini-metric">
+          <span class="mini-lbl">CASH</span>
+          <strong id="cashAmount" class="mini-val">$0.00</strong>
+        </div>
+      </div>
 
-        <div class="total-balance-header">
-            <span class="label">Total Balance</span>
-            <span class="value" id="totalBalance">$0.00</span>
-        </div>
+      <div class="hdr-balance">
+        <span class="balance-lbl">NET ASSET VALUE</span>
+        <span id="totalBalance" class="balance-val">$0.00</span>
+      </div>
     </header>
 
-        <!-- Main Grid Layout -->
-        <div class="main-grid">
-            <!-- Summary Cards -->
-            <section class="summary-cards">
-                <div class="card">
-                    <h3>Total Profit</h3>
-                    <p class="profit" id="totalProfit">+$0.00</p>
-                </div>
-                <div class="card">
-                    <h3>Daily Change</h3>
-                    <p class="change" id="dailyChange">0.00%</p>
-                </div>
-                <div class="card">
-                    <h3>Highest Growth</h3>
-                    <p class="growth" id="highestGrowth">--</p>
-                </div>
-            </section>
-
-            <!-- Holdings Table -->
-            <section class="holdings-section">
-                <h2>Holdings</h2>
-                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; justify-content: center;">
-                    <button id="addPositionBtn" class="btn btn-primary">+ Add Stock</button>
-                    <button id="depositCashBtn" class="btn btn-cash">💰 Deposit Cash</button>
-                    <button id="withdrawCashBtn" class="btn btn-cash btn-cash--withdraw">💸 Withdraw Cash</button>
-                </div>
-                <div class="holdings-table-container">
-                    <table class="holdings-table">
-                        <thead>
-                            <tr>
-                                <th>Ticker</th>
-                                <th>Shares</th>
-                                <th>Price</th>
-                                <th>Value</th>
-                                <th>Day %</th>
-                                <th>Total PnL</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="holdingsBody">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- AI Strategist Panel -->
-            <aside class="ai-strategist">
-                <h2>AI Strategist</h2>
-                <div class="chat-container" id="chatContainer">
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="message bot">
-                            <p>Hello! I'm your AI investment strategist. Ask me about your portfolio or market insights.</p>
-                        </div>
-                    </div>
-                    <!-- Web Search Toggle -->
-                    <div class="web-search-toggle">
-                        <input type="checkbox" id="webSearchToggle" checked>
-                        <span class="toggle-label">Include web search</span>
-                    </div>
-                    <div class="chat-input-area">
-                        <input type="text" id="chatInput" placeholder="Ask the AI strategist...">
-                        <button id="sendButton">Send</button>
-                    </div>
-                </div>
-            </aside>
+    <!-- Metrics Bar -->
+    <div class="metrics-bar">
+      <div class="mc">
+        <span class="mc-lbl">TOTAL P&amp;L</span>
+        <p id="totalProfit" class="mc-val">+$0.00</p>
+      </div>
+      <div class="mc">
+        <span class="mc-lbl">DAILY CHANGE</span>
+        <p id="dailyChange" class="mc-val">0.00%</p>
+      </div>
+      <div class="mc">
+        <span class="mc-lbl">TOP PERFORMER</span>
+        <p id="highestGrowth" class="mc-val mc-val--neutral">──</p>
+      </div>
+      <div class="mc mc--live">
+        <span class="mc-lbl">MARKET DATA</span>
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span class="live-txt">LIVE</span>
         </div>
-
-        <!-- Bottom Status Bar -->
-        <footer class="status-bar">
-            <div class="status-item">
-                <span class="status-label">MongoDB:</span>
-                <span class="status-value" id="mongoStatus">Connecting...</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">AI Backend:</span>
-                <span class="status-value" id="ollamaStatus">Connecting...</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Portfolio:</span>
-                <span class="status-value" id="currentPortfolio">--</span>
-            </div>
-        </footer>
+      </div>
     </div>
 
-     <!-- Add/Edit Position Modal -->
-     <div id="positionModal" class="modal-overlay">
-         <div class="modal-content">
-             <h3 id="modalTitle">Add Position</h3>
-             <form id="positionForm">
-                 <div class="form-group">
-                     <label for="tickerInput">Ticker</label>
-                     <input type="text" id="tickerInput" placeholder="AAPL" required maxlength="10">
-                 </div>
-                 <div class="form-group">
-                     <label for="sharesInput">Shares</label>
-                     <input type="number" id="sharesInput" step="0.01" min="0.01" required>
-                 </div>
-                 <div class="form-group">
-                     <label for="costInput">Average Cost ($)</label>
-                     <input type="number" id="costInput" step="0.01" min="0" required>
-                 </div>
-                 <div class="modal-actions">
-                     <button type="button" id="cancelBtn" class="btn-cancel">Cancel</button>
-                     <button type="submit" class="btn-primary">Save</button>
-                 </div>
-             </form>
-         </div>
-     </div>
-                <div class="form-group">
-                    <label for="sharesInput">Shares</label>
-                    <input type="number" id="sharesInput" step="0.01" min="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="costInput">Average Cost ($)</label>
-                    <input type="number" id="costInput" step="0.01" min="0" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" id="cancelBtn" class="btn-cancel">Cancel</button>
-                    <button type="submit" class="btn-primary">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- Main Grid: Holdings + AI -->
+    <div class="main-grid">
 
-    <!-- Cash Modal -->
-    <div id="cashModal" class="modal-overlay">
-        <div class="modal-content">
-            <h3 id="cashModalTitle">Cash Operation</h3>
-            <form id="cashForm">
-                <div class="form-group">
-                    <label for="cashAmountInput">Amount ($)</label>
-                    <input type="number" id="cashAmountInput" step="0.01" min="0.01" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" id="cashCancelBtn" class="btn-cancel">Cancel</button>
-                    <button type="submit" class="btn-primary" id="cashSubmitBtn">Deposit</button>
-                </div>
-            </form>
+      <!-- Holdings Pane -->
+      <section class="holdings-pane">
+        <div class="pane-hdr">
+          <span class="pane-title">// POSITIONS</span>
+          <div class="pane-actions">
+            <button id="addPositionBtn"  class="act-btn act-btn--blue">+ ADD</button>
+            <button id="depositCashBtn"  class="act-btn act-btn--gain">↓ DEPOSIT</button>
+            <button id="withdrawCashBtn" class="act-btn act-btn--amber">↑ WITHDRAW</button>
+          </div>
         </div>
-    </div>
+        <div class="holdings-table-container">
+          <table class="holdings-table">
+            <thead>
+              <tr>
+                <th class="col-ticker sortable" data-sort="ticker">TICKER</th>
+                <th class="col-num">SHARES</th>
+                <th class="col-num">PRICE</th>
+                <th class="col-num sortable" data-sort="market_value">VALUE</th>
+                <th class="col-alloc">ALLOC</th>
+                <th class="col-num sortable" data-sort="daily_change">DAY %</th>
+                <th class="col-num sortable" data-sort="total_pnl_pct">TOTAL %</th>
+                <th class="col-num sortable" data-sort="total_pnl">P&amp;L</th>
+                <th class="col-ops">OPS</th>
+              </tr>
+            </thead>
+            <tbody id="holdingsBody"></tbody>
+          </table>
+        </div>
+      </section>
 
-        <!-- Main application logic -->
-        <script src="/static/app.js?v=3.5"></script>
+      <!-- AI Strategist Pane -->
+      <aside class="ai-pane">
+        <div class="pane-hdr">
+          <span class="pane-title">// AI STRATEGIST</span>
+          <span class="ai-tag">◉ LLM</span>
+        </div>
+        <div class="chat-container" id="chatContainer">
+          <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+              <p>Terminal ready. Query your portfolio or market conditions.</p>
+            </div>
+          </div>
+          <div class="web-search-toggle">
+            <label class="wst-label">
+              <input type="checkbox" id="webSearchToggle" checked>
+              <span class="wst-track"><span class="wst-thumb"></span></span>
+              <span class="wst-text">WEB SEARCH</span>
+            </label>
+          </div>
+          <div class="chat-input-area">
+            <span class="prompt-glyph">▶</span>
+            <input type="text" id="chatInput" placeholder="Enter query…" autocomplete="off" spellcheck="false">
+            <button id="sendButton">SEND</button>
+          </div>
+        </div>
+      </aside>
+
+    </div><!-- .main-grid -->
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+      <div class="sb-left">
+        <div class="sb-item">
+          <span class="sb-dot sb-dot--db" id="mongoStatusDot"></span>
+          <span class="sb-key">MONGODB</span>
+          <span class="sb-val" id="mongoStatus">──</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-key">AI ENGINE</span>
+          <span class="sb-val" id="ollamaStatus">LM STUDIO</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-key">SESSION</span>
+          <span class="sb-val" id="currentPortfolio">──</span>
+        </div>
+      </div>
+      <div class="sb-right">
+        <span class="sb-clock" id="statusTime"></span>
+        <span class="sb-sep">·</span>
+        <span class="sb-version">STRATEGIST v2.0</span>
+      </div>
+    </footer>
+
+  </div><!-- #dashboard-page -->
+
+
+  <!-- ═══════════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════════ -->
+
+  <!-- Position Modal -->
+  <div id="positionModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="modalTitle" class="modal-hdr">ADD POSITION</h3>
+      <form id="positionForm">
+        <div class="field-grp">
+          <label class="field-lbl" for="tickerInput">SYMBOL</label>
+          <input class="field-inp" type="text" id="tickerInput" placeholder="e.g. AAPL" required maxlength="10">
+        </div>
+        <div class="field-row">
+          <div class="field-grp">
+            <label class="field-lbl" for="sharesInput">SHARES</label>
+            <input class="field-inp" type="number" id="sharesInput" step="0.01" min="0.01" required>
+          </div>
+          <div class="field-grp">
+            <label class="field-lbl" for="costInput">AVG COST ($)</label>
+            <input class="field-inp" type="number" id="costInput" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" id="cancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" class="mbtn mbtn--confirm">CONFIRM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cash Modal -->
+  <div id="cashModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="cashModalTitle" class="modal-hdr">DEPOSIT CASH</h3>
+      <form id="cashForm">
+        <div class="field-grp">
+          <label class="field-lbl" for="cashAmountInput">AMOUNT ($)</label>
+          <input class="field-inp" type="number" id="cashAmountInput" step="0.01" min="0.01" required>
+        </div>
+        <div class="modal-foot">
+          <button type="button" id="cashCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" id="cashSubmitBtn" class="mbtn mbtn--confirm">CONFIRM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal-box modal-box--sm">
+      <h3 id="confirmTitle" class="modal-hdr">CONFIRM</h3>
+      <p id="confirmMessage" class="confirm-msg"></p>
+      <div class="modal-foot">
+        <button id="confirmCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+        <button id="confirmOkBtn" class="mbtn mbtn--danger">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Logic -->
+  <script src="/static/app.js?v=4.2"></script>
+
+  <script>
+    (function() {
+      function tickClock() {
+        var t = new Date().toLocaleTimeString('en-GB', {hour12: false});
+        var el1 = document.getElementById('sysTime');
+        var el2 = document.getElementById('statusTime');
+        if (el1) el1.textContent = t + ' UTC';
+        if (el2) el2.textContent = t + ' UTC';
+      }
+      tickClock();
+      setInterval(tickClock, 1000);
+    })();
+  </script>
+
 </body>
 </html>
-
-

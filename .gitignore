@@ -22,3 +22,4 @@ test.xlsx
 test_upload_debug.py
 debug_yfinance.py
 .pytest_cache
+old_files
