@@ -183,14 +183,17 @@ document.addEventListener("DOMContentLoaded", () => {
    * SECTION 9 · STATUS MONITOR
    **************************************************************************/
   function updateStatusIndicators() {
-    const mongoStatus = document.getElementById("mongoStatus");
+    const mongoStatus  = document.getElementById("mongoStatus");
+    const mongoStatusDot = document.getElementById("mongoStatusDot");
     fetch("/api/portfolios/list")
       .then((resp) => {
         if (!resp.ok) throw new Error();
-        if (mongoStatus) { mongoStatus.textContent = "Connected"; mongoStatus.style.color = "#10b981"; }
+        if (mongoStatus)    { mongoStatus.textContent = "Connected"; mongoStatus.style.color = "#10b981"; }
+        if (mongoStatusDot) { mongoStatusDot.style.background = "#10b981"; mongoStatusDot.style.boxShadow = "0 0 6px #10b981"; }
       })
       .catch(() => {
-        if (mongoStatus) { mongoStatus.textContent = "Disconnected"; mongoStatus.style.color = "#ef4444"; }
+        if (mongoStatus)    { mongoStatus.textContent = "Disconnected"; mongoStatus.style.color = "#ef4444"; }
+        if (mongoStatusDot) { mongoStatusDot.style.background = "#ef4444"; mongoStatusDot.style.boxShadow = "none"; }
       });
   }
 
@@ -412,6 +415,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const data  = await response.json();
       const names = data.portfolios || [];
       portfolioList.innerHTML = "";
+
+      const countEl = document.getElementById("portfolioCount");
+      if (countEl) countEl.textContent = names.length > 0 ? `${names.length}` : "";
 
       if (names.length === 0) {
         portfolioList.innerHTML = '<div class="portfolio-card portfolio-card--empty">No portfolios found</div>';
