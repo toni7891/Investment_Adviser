@@ -15,7 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const currentPortfolioEl = document.getElementById("currentPortfolio");
   const totalBalanceEl     = document.getElementById("totalBalance");
   const totalProfitEl      = document.getElementById("totalProfit");
-  const dailyChangeEl      = document.getElementById("dailyChange");
+  const dailyChangeEl        = document.getElementById("dailyChange");
+  const dailyChangeDollarEl  = document.getElementById("dailyChangeDollar");
   const highestGrowthEl    = document.getElementById("highestGrowth");
   const investedAmountEl   = document.getElementById("investedAmount");
   const cashAmountEl       = document.getElementById("cashAmount");
@@ -96,6 +97,26 @@ document.addEventListener("DOMContentLoaded", () => {
   // Ticker tape animation frame id
   let tickerAnimId = null;
 
+  // Diagnostic object — inspect via window.__tickerDiag in browser console
+  window.__tickerDiag = {
+    running:    false,
+    lastStart:  null,
+    lastError:  null,
+    singleW:    null,
+    copies:     null,
+    itemCount:  null,
+    status() {
+      console.table({
+        running:   this.running,
+        lastStart: this.lastStart,
+        lastError: this.lastError,
+        singleW:   this.singleW,
+        copies:    this.copies,
+        itemCount: this.itemCount,
+      });
+    },
+  };
+
   /**************************************************************************
    * SECTION 3 · FORMATTERS
    **************************************************************************/
@@ -120,13 +141,11 @@ document.addEventListener("DOMContentLoaded", () => {
    * SECTION 4 · NAVIGATION
    **************************************************************************/
   function showDashboard() {
-    landingPage?.classList.add("hidden");
-    dashboardPage?.classList.remove("hidden");
+    window.location.href = "/dashboard";
   }
 
   function showLanding() {
-    dashboardPage?.classList.add("hidden");
-    landingPage?.classList.remove("hidden");
+    window.location.href = "/";
   }
 
   /**************************************************************************
@@ -257,12 +276,17 @@ document.addEventListener("DOMContentLoaded", () => {
    **************************************************************************/
   function sortPositions(positions) {
     const augmented = positions.map((p) => {
-      const price = Number(p.current_price || 0);
-      const cost  = Number(p.average_cost  || 0);
+      const price      = Number(p.current_price || 0);
+      const cost       = Number(p.average_cost  || 0);
+      const mv         = Number(p.market_value  || price * Number(p.shares || 0));
+      const dayPct     = Number(p.daily_change  || 0);
+      // daily $ = mv - mv / (1 + dayPct/100)  (exact, derived from pct)
+      const dayDollar  = mv - mv / (1 + dayPct / 100);
       return {
         ...p,
-        total_pnl:     Number(p.pl || 0),
-        total_pnl_pct: cost > 0 ? ((price - cost) / cost) * 100 : 0,
+        total_pnl:           Number(p.pl || 0),
+        total_pnl_pct:       cost > 0 ? ((price - cost) / cost) * 100 : 0,
+        daily_change_dollar: dayDollar,
       };
     });
 
@@ -298,13 +322,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const sorted  = sortPositions(data.positions || []);
 
     sorted.forEach((stock) => {
-      const dayChangePct = Number(stock.daily_change  || 0);
-      const currentPrice = Number(stock.current_price || 0);
-      const shares       = Number(stock.shares        || 0);
-      const marketValue  = Number(stock.market_value  || currentPrice * shares);
-      const totalPnL     = Number(stock.total_pnl     || 0);
-      const totalPnLPct  = Number(stock.total_pnl_pct || 0);
-      const allocPct     = totalValue > 0 ? (marketValue / totalValue) * 100 : 0;
+      const dayChangePct    = Number(stock.daily_change         || 0);
+      const dayChangeDollar = Number(stock.daily_change_dollar  || 0);
+      const currentPrice    = Number(stock.current_price        || 0);
+      const shares          = Number(stock.shares               || 0);
+      const marketValue     = Number(stock.market_value         || currentPrice * shares);
+      const totalPnL        = Number(stock.total_pnl            || 0);
+      const totalPnLPct     = Number(stock.total_pnl_pct        || 0);
+      const allocPct        = totalValue > 0 ? (marketValue / totalValue) * 100 : 0;
 
       if (!bestStock || dayChangePct > Number(bestStock.daily_change || 0)) {
         bestStock = stock;
@@ -324,8 +349,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <span class="alloc-num">${allocPct.toFixed(1)}%</span>
           </div>
         </td>
-        <td class="col-num ${dayChangePct >= 0 ? "success" : "negative"}">${formatPercent(dayChangePct)}</td>
-        <td class="col-num ${totalPnLPct  >= 0 ? "success" : "negative"}">${formatPercent(totalPnLPct)}</td>
+        <td class="col-num ${dayChangePct    >= 0 ? "success" : "negative"}">${formatPercent(dayChangePct)}</td>
+        <td class="col-num ${dayChangeDollar >= 0 ? "success" : "negative"}">${formatCurrency(dayChangeDollar)}</td>
+        <td class="col-num ${totalPnLPct     >= 0 ? "success" : "negative"}">${formatPercent(totalPnLPct)}</td>
         <td class="col-num ${totalPnL    >= 0 ? "success" : "negative"}">${formatCurrency(totalPnL)}</td>
         <td class="col-ops">
           <button class="btn-edit" data-ticker="${stock.ticker}" title="Edit ${stock.ticker}">
@@ -390,9 +416,10 @@ document.addEventListener("DOMContentLoaded", () => {
       .then((data) => {
         lastPortfolioData = data;
 
-        const totalBalance   = Number(data.total_balance   || 0);
-        const totalProfit    = Number(data.total_profit    || 0);
-        const dailyChangePct = Number(data.daily_change_pct || 0);
+        const totalBalance      = Number(data.total_balance    || 0);
+        const totalProfit       = Number(data.total_profit     || 0);
+        const dailyChangePct    = Number(data.daily_change_pct || 0);
+        const dailyChangeDollar = totalBalance - totalBalance / (1 + dailyChangePct / 100);
         const investedValue  = Number(data.invested_value  || 0);
         const cashValue      = Number(data.cash_value      || 0);
 
@@ -407,6 +434,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (dailyChangeEl) {
           dailyChangeEl.textContent = formatPercent(dailyChangePct);
           setSignedStatus(dailyChangeEl, dailyChangePct);
+        }
+        if (dailyChangeDollarEl) {
+          dailyChangeDollarEl.textContent = `${dailyChangeDollar >= 0 ? "+" : ""}${formatCurrency(dailyChangeDollar)}`;
+          setSignedStatus(dailyChangeDollarEl, dailyChangeDollar);
         }
         if (currentPortfolioEl) currentPortfolioEl.textContent = currentPortfolioId;
 
@@ -460,19 +491,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         card.addEventListener("click", (e) => {
           if (e.target.closest(".portfolio-card__delete")) return;
-          currentPortfolioId = name;
-          if (portfolioTitle) portfolioTitle.textContent = name;
+          localStorage.setItem("currentPortfolioId", name);
           showDashboard();
-          loadSummary();
         });
 
         card.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            currentPortfolioId = name;
-            if (portfolioTitle) portfolioTitle.textContent = name;
+            localStorage.setItem("currentPortfolioId", name);
             showDashboard();
-            loadSummary();
           }
         });
 
@@ -971,28 +998,60 @@ document.addEventListener("DOMContentLoaded", () => {
         return `<span class="tick ${cls}">${it.display}&nbsp;${fmtPrice(it.price, it.symbol)}&nbsp;${arrow}&nbsp;${sign}${it.change_pct.toFixed(2)}%</span><span class="tick-sep">◆</span>`;
       }).join("");
 
-      // Measure single-copy width, then fill track with enough copies to
-      // always span at least 2× the tape width so there is never empty space.
-      track.style.transform = "translateX(0)";
-      track.innerHTML = itemHtml;
-      const tapeW   = tape.offsetWidth;
-      const singleW = track.scrollWidth || 1;
-      const copies  = Math.max(2, Math.ceil((tapeW * 2) / singleW) + 1);
-      track.innerHTML = Array.from({ length: copies }, () => itemHtml).join("");
-
-      // Cancel the previous loop and start a new one that scrolls left by
-      // exactly singleW pixels before seamlessly wrapping back to 0.
+      // Stop any running animation before rebuilding.
       if (tickerAnimId !== null) { cancelAnimationFrame(tickerAnimId); tickerAnimId = null; }
-      let pos = 0;
-      const step = () => {
-        pos -= 0.8;                          // ~48 px/s at 60 fps
-        if (pos <= -singleW) pos += singleW; // loop by one copy width
-        track.style.transform = `translateX(${pos}px)`;
-        tickerAnimId = requestAnimationFrame(step);
+      window.__tickerDiag.running   = false;
+      window.__tickerDiag.itemCount = items.length;
+
+      track.style.transform = "translateX(0)";
+      track.innerHTML = itemHtml; // single copy — used only to measure content width
+
+      // Double-rAF: first frame queues layout, second frame reads it after paint.
+      // A single rAF fires before paint so scrollWidth can still be 0 for new content.
+      const startAnimation = (attempt = 1) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const tapeW   = tape.offsetWidth;
+            const singleW = track.scrollWidth;
+
+            if (!singleW) {
+              if (attempt < 3) {
+                console.warn(`[TickerTape] scrollWidth=0 on attempt ${attempt}, retrying…`);
+                startAnimation(attempt + 1);
+              } else {
+                const msg = "[TickerTape] scrollWidth still 0 after 3 attempts — tape hidden or empty.";
+                console.error(msg);
+                window.__tickerDiag.lastError = msg;
+              }
+              return;
+            }
+
+            const copies = Math.max(2, Math.ceil((tapeW * 2) / singleW) + 1);
+            track.innerHTML = Array.from({ length: copies }, () => itemHtml).join("");
+
+            window.__tickerDiag.singleW   = singleW;
+            window.__tickerDiag.copies    = copies;
+            window.__tickerDiag.lastStart = new Date().toISOString();
+            window.__tickerDiag.running   = true;
+            window.__tickerDiag.lastError = null;
+            console.log(`[TickerTape] started — ${items.length} items, singleW=${singleW}px, copies=${copies}`);
+
+            let pos = 0;
+            const step = () => {
+              pos -= 0.8;                          // ~48 px/s at 60 fps
+              if (pos <= -singleW) pos += singleW; // seamless loop
+              track.style.transform = `translateX(${pos}px)`;
+              tickerAnimId = requestAnimationFrame(step);
+            };
+            tickerAnimId = requestAnimationFrame(step);
+          });
+        });
       };
-      tickerAnimId = requestAnimationFrame(step);
+
+      startAnimation();
     } catch (e) {
-      console.error("Ticker tape error:", e);
+      console.error("[TickerTape] error:", e);
+      window.__tickerDiag.lastError = String(e);
     }
   }
 
@@ -1135,12 +1194,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Initial state
-  updateSortHeaders();
-  updateStatusIndicators();
-  loadPortfolios();
-  updateTickerTape();
-  setInterval(updateTickerTape, 5 * 60 * 1000);   // refresh tape every 5 min
-  loadFearGreed();
-  setInterval(loadFearGreed, 60 * 60 * 1000);      // refresh F&G every 1 hour
+  // Detect which page we're on and run the appropriate init
+  const isLanding   = !!document.getElementById("landing-page");
+  const isDashboard = !!document.getElementById("dashboard-page");
+
+  if (isLanding) {
+    loadPortfolios();
+  }
+
+  if (isDashboard) {
+    currentPortfolioId = localStorage.getItem("currentPortfolioId") || null;
+    if (!currentPortfolioId) {
+      // No portfolio selected — send back to landing
+      window.location.href = "/";
+    } else {
+      if (portfolioTitle)     portfolioTitle.textContent     = currentPortfolioId;
+      if (currentPortfolioEl) currentPortfolioEl.textContent = currentPortfolioId;
+      updateSortHeaders();
+      updateStatusIndicators();
+      loadSummary();
+      updateTickerTape();
+      setInterval(updateTickerTape, 5 * 60 * 1000);   // refresh tape every 5 min
+      loadFearGreed();
+      setInterval(loadFearGreed, 60 * 60 * 1000);      // refresh F&G every 1 hour
+    }
+  }
 });

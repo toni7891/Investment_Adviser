@@ -70,6 +70,11 @@ async def serve_index():
     index_path = static_dir / "index.html"
     return FileResponse(str(index_path))
 
+@app.get("/dashboard", include_in_schema=False)
+async def serve_dashboard():
+    dashboard_path = static_dir / "dashboard.html"
+    return FileResponse(str(dashboard_path))
+
 if __name__ == "__main__":
     import uvicorn
     # Timeout configuration for long-running AI requests (5 minutes)

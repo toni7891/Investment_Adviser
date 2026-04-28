@@ -262,3 +262,112 @@ def test_get_portfolio_calculates_metrics():
     assert "daily_change_pct" in data
     assert "positions" in data
     assert isinstance(data["positions"], list)
+
+
+# ---------------------------------------------------------------------------
+# Ticker tape tests
+# ---------------------------------------------------------------------------
+
+def _tape_mock_df(tickers, dates):
+    """
+    Build a MultiIndex DataFrame matching yfinance group_by='ticker' output.
+    Columns are (ticker, field) so that df[ticker] returns OHLCV sub-frame.
+    """
+    import pandas as pd
+    fields = ["Open", "High", "Low", "Close", "Volume"]
+    col_tuples = [(t, f) for t in tickers for f in fields]
+    cols = pd.MultiIndex.from_tuples(col_tuples)
+    rows = []
+    for i in range(len(dates)):
+        row = []
+        for t_idx, _ in enumerate(tickers):
+            for f in fields:
+                row.append(100.0 + t_idx * 2 + i if f == "Close" else 0.0)
+        rows.append(row)
+    return pd.DataFrame(rows, index=dates, columns=cols)
+
+
+def _reset_tape_cache():
+    """Clear the module-level tape cache so tests start fresh."""
+    # The app adds backend/ to sys.path so routes is loaded as top-level 'routes'
+    # *and* as 'backend.routes' — patch whichever is present.
+    import sys
+    for mod_name in ("routes", "backend.routes"):
+        mod = sys.modules.get(mod_name)
+        if mod and hasattr(mod, "_TAPE_CACHE"):
+            mod._TAPE_CACHE["data"] = None
+            mod._TAPE_CACHE["ts"]   = 0
+
+
+def test_ticker_tape_returns_correct_shape():
+    """GET /api/market/ticker-tape returns items list with required fields."""
+    import pandas as pd
+    from datetime import datetime, timedelta
+    from unittest.mock import patch
+
+    client, _ = get_test_client()
+    _reset_tape_cache()
+
+    dates = pd.DatetimeIndex([
+        datetime.today() - timedelta(days=1),
+        datetime.today(),
+    ])
+
+    def mock_download(tickers, **kwargs):
+        if isinstance(tickers, str):
+            tickers = [tickers]
+        return _tape_mock_df(tickers, dates)
+
+    with patch("yfinance.download", side_effect=mock_download):
+        response = client.get("/api/market/ticker-tape")
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    body = response.json()
+
+    assert "items" in body, "Response must have 'items' key"
+    assert "updated_at" in body, "Response must have 'updated_at' key"
+    assert isinstance(body["items"], list), "'items' must be a list"
+    assert len(body["items"]) > 0, "Tape must contain at least one item"
+
+    required_fields = {"symbol", "display", "price", "change_pct", "direction"}
+    for item in body["items"]:
+        missing = required_fields - item.keys()
+        assert not missing, f"Item missing fields {missing}: {item}"
+        assert item["direction"] in ("up", "down", "flat"), \
+            f"direction must be up/down/flat, got {item['direction']!r}"
+        assert isinstance(item["price"], (int, float)), "price must be numeric"
+        assert isinstance(item["change_pct"], (int, float)), "change_pct must be numeric"
+
+
+def test_ticker_tape_is_cached():
+    """Second call within TTL returns same data without hitting yfinance again."""
+    import pandas as pd
+    from datetime import datetime, timedelta
+    from unittest.mock import patch
+
+    client, _ = get_test_client()
+    _reset_tape_cache()
+
+    dates = pd.DatetimeIndex([
+        datetime.today() - timedelta(days=1),
+        datetime.today(),
+    ])
+
+    call_count = {"n": 0}
+
+    def mock_download(tickers, **kwargs):
+        call_count["n"] += 1
+        if isinstance(tickers, str):
+            tickers = [tickers]
+        return _tape_mock_df(tickers, dates)
+
+    with patch("yfinance.download", side_effect=mock_download):
+        r1 = client.get("/api/market/ticker-tape")
+        r2 = client.get("/api/market/ticker-tape")  # should hit cache
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert call_count["n"] == 1, \
+        f"yfinance.download called {call_count['n']} times — cache not working"
+    assert r1.json()["updated_at"] == r2.json()["updated_at"], \
+        "updated_at should be identical on cached response"

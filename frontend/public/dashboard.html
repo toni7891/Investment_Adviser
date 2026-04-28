@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4RCH3R · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=5.0">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD PAGE
+  ═══════════════════════════════════════════ -->
+  <div id="dashboard-page" class="page">
+
+    <!-- Ticker Tape -->
+    <div class="ticker-tape" aria-hidden="true">
+      <div class="ticker-track"></div>
+    </div>
+
+    <!-- Dashboard Header -->
+    <header class="dash-header">
+      <div class="hdr-left">
+        <button id="backButton" class="back-btn">← BACK</button>
+        <div class="port-ident">
+          <span class="port-label">PORTFOLIO</span>
+          <h2 id="portfolioTitle" class="port-name">──────</h2>
+        </div>
+      </div>
+
+      <div class="hdr-minis">
+        <div class="mini-metric">
+          <span class="mini-lbl">INVESTED</span>
+          <strong id="investedAmount" class="mini-val">$0.00</strong>
+        </div>
+        <div class="mini-divider"></div>
+        <div class="mini-metric">
+          <span class="mini-lbl">CASH</span>
+          <strong id="cashAmount" class="mini-val">$0.00</strong>
+        </div>
+      </div>
+
+      <div class="hdr-balance">
+        <span class="balance-lbl">NET ASSET VALUE</span>
+        <span id="totalBalance" class="balance-val">$0.00</span>
+      </div>
+    </header>
+
+    <!-- Metrics Bar -->
+    <div class="metrics-bar">
+      <div class="mc">
+        <span class="mc-lbl">TOTAL P&amp;L</span>
+        <p id="totalProfit" class="mc-val">+$0.00</p>
+      </div>
+      <div class="mc">
+        <span class="mc-lbl">DAILY CHANGE</span>
+        <p id="dailyChange" class="mc-val">0.00%</p>
+      </div>
+      <div class="mc">
+        <span class="mc-lbl">DAILY CHANGE $</span>
+        <p id="dailyChangeDollar" class="mc-val">$0.00</p>
+      </div>
+      <div class="mc">
+        <span class="mc-lbl">TOP PERFORMER</span>
+        <p id="highestGrowth" class="mc-val mc-val--neutral">──</p>
+      </div>
+      <div class="mc mc--live">
+        <span class="mc-lbl">MARKET DATA</span>
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span class="live-txt">LIVE</span>
+        </div>
+      </div>
+      <!-- Fear & Greed Widget -->
+      <div class="mc mc--fng" id="fngWidget">
+        <span class="mc-lbl">FEAR &amp; GREED</span>
+        <div class="fng-display">
+          <div class="fng-ring" id="fngRing">
+            <span id="fngScore" class="fng-score">──</span>
+          </div>
+          <span id="fngRating" class="fng-rating">──</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Grid: Holdings + AI -->
+    <div class="main-grid">
+
+      <!-- Holdings Pane -->
+      <section class="holdings-pane">
+        <div class="pane-hdr">
+          <span class="pane-title">// POSITIONS</span>
+          <div class="pane-actions">
+            <button id="addPositionBtn"  class="act-btn act-btn--blue">+ BUY</button>
+            <button id="depositCashBtn"  class="act-btn act-btn--gain">↓ DEPOSIT</button>
+            <button id="withdrawCashBtn" class="act-btn act-btn--amber">↑ WITHDRAW</button>
+          </div>
+        </div>
+        <div class="holdings-table-container">
+          <table class="holdings-table">
+            <thead>
+              <tr>
+                <th class="col-ticker sortable" data-sort="ticker">TICKER</th>
+                <th class="col-num">SHARES</th>
+                <th class="col-num">PRICE</th>
+                <th class="col-num sortable" data-sort="market_value">VALUE</th>
+                <th class="col-alloc">ALLOC</th>
+                <th class="col-num sortable" data-sort="daily_change">DAY %</th>
+                <th class="col-num sortable" data-sort="daily_change_dollar">DAY $</th>
+                <th class="col-num sortable" data-sort="total_pnl_pct">TOTAL %</th>
+                <th class="col-num sortable" data-sort="total_pnl">P&amp;L</th>
+                <th class="col-ops">OPS</th>
+              </tr>
+            </thead>
+            <tbody id="holdingsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- AI Strategist Pane -->
+      <aside class="ai-pane">
+        <div class="pane-hdr">
+          <span class="pane-title">// AI STRATEGIST</span>
+          <span class="ai-tag">◉ LLM</span>
+        </div>
+        <div class="chat-container" id="chatContainer">
+          <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+              <p>Terminal ready. Query your portfolio or market conditions.</p>
+            </div>
+          </div>
+          <div class="web-search-toggle">
+            <label class="wst-label">
+              <input type="checkbox" id="webSearchToggle" checked>
+              <span class="wst-track"><span class="wst-thumb"></span></span>
+              <span class="wst-text">WEB SEARCH</span>
+            </label>
+          </div>
+          <div class="chat-input-area">
+            <span class="prompt-glyph">▶</span>
+            <input type="text" id="chatInput" placeholder="Enter query…" autocomplete="off" spellcheck="false">
+            <button id="sendButton">SEND</button>
+          </div>
+        </div>
+      </aside>
+
+    </div><!-- .main-grid -->
+
+    <!-- Portfolio Heartrate -->
+    <section class="heartrate-section" id="heartrateSection">
+      <div class="pane-hdr">
+        <div class="heartrate-left">
+          <span class="pane-title">// PORTFOLIO HEARTRATE</span>
+          <span id="heartrateChange" class="heartrate-change"></span>
+        </div>
+        <div class="heartrate-controls">
+          <div class="period-tabs">
+            <button class="period-btn active" data-period="1w">1W</button>
+            <button class="period-btn" data-period="1m">1M</button>
+            <button class="period-btn" data-period="3m">3M</button>
+            <button class="period-btn" data-period="6m">6M</button>
+            <button class="period-btn" data-period="1y">1Y</button>
+            <button class="period-btn" data-period="all">ALL</button>
+          </div>
+          <button id="takeSnapshotBtn"  class="act-btn act-btn--gain">◎ SNAPSHOT</button>
+          <button id="importHistoryBtn" class="act-btn act-btn--amber">↑ IMPORT</button>
+          <button id="exportHistoryBtn" class="act-btn act-btn--blue">↓ EXPORT</button>
+          <input id="snapshotImportInput" type="file" accept=".xlsx,.xls" style="display:none">
+        </div>
+      </div>
+      <div class="heartrate-chart-wrap">
+        <canvas id="portfolioChart"></canvas>
+        <div id="chartEmpty" class="chart-empty">No historical data yet — a snapshot is recorded daily when you open the portfolio.</div>
+      </div>
+    </section>
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+      <div class="sb-left">
+        <div class="sb-item">
+          <span class="sb-dot sb-dot--db" id="mongoStatusDot"></span>
+          <span class="sb-key">MONGODB</span>
+          <span class="sb-val" id="mongoStatus">──</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-key">AI ENGINE</span>
+          <span class="sb-val" id="ollamaStatus">LM STUDIO</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-key">SESSION</span>
+          <span class="sb-val" id="currentPortfolio">──</span>
+        </div>
+      </div>
+      <div class="sb-right">
+        <span class="sb-clock" id="statusTime"></span>
+        <span class="sb-sep">·</span>
+        <span class="sb-version">STRATEGIST v2.0</span>
+      </div>
+    </footer>
+
+  </div><!-- #dashboard-page -->
+
+
+  <!-- ═══════════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════════ -->
+
+  <!-- Position Modal -->
+  <div id="positionModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="modalTitle" class="modal-hdr">BUY POSITION</h3>
+      <form id="positionForm">
+        <div class="field-grp" id="availableCashGroup">
+          <label class="field-lbl">AVAILABLE CASH</label>
+          <div id="availableCashDisplay" class="field-display">──</div>
+        </div>
+        <div class="field-grp">
+          <label class="field-lbl" for="tickerInput">SYMBOL</label>
+          <input class="field-inp" type="text" id="tickerInput" placeholder="e.g. AAPL" required maxlength="10">
+        </div>
+        <div class="field-row">
+          <div class="field-grp">
+            <label class="field-lbl" for="sharesInput">SHARES</label>
+            <input class="field-inp" type="number" id="sharesInput" step="0.01" min="0.01" required>
+          </div>
+          <div class="field-grp">
+            <label class="field-lbl" for="costInput">PRICE PER SHARE ($)</label>
+            <input class="field-inp" type="number" id="costInput" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div id="buyCostDisplay" class="sell-proceeds"></div>
+        <div class="modal-foot">
+          <button type="button" id="cancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" class="mbtn mbtn--confirm">CONFIRM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cash Modal -->
+  <div id="cashModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="cashModalTitle" class="modal-hdr">DEPOSIT CASH</h3>
+      <form id="cashForm">
+        <div class="field-grp">
+          <label class="field-lbl" for="cashAmountInput">AMOUNT ($)</label>
+          <input class="field-inp" type="number" id="cashAmountInput" step="0.01" min="0.01" required>
+        </div>
+        <div class="modal-foot">
+          <button type="button" id="cashCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" id="cashSubmitBtn" class="mbtn mbtn--confirm">CONFIRM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal-box modal-box--sm">
+      <h3 id="confirmTitle" class="modal-hdr">CONFIRM</h3>
+      <p id="confirmMessage" class="confirm-msg"></p>
+      <div class="modal-foot">
+        <button id="confirmCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+        <button id="confirmOkBtn" class="mbtn mbtn--danger">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sell Modal -->
+  <div id="sellModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-hdr">SELL POSITION</h3>
+      <form id="sellForm">
+        <div class="field-row">
+          <div class="field-grp">
+            <label class="field-lbl">TICKER</label>
+            <div id="sellTickerLabel" class="field-display">──</div>
+          </div>
+          <div class="field-grp">
+            <label class="field-lbl">AVAILABLE SHARES</label>
+            <div id="sellAvailableLabel" class="field-display">──</div>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-grp">
+            <label class="field-lbl" for="sellSharesInput">SHARES TO SELL</label>
+            <input class="field-inp" type="number" id="sellSharesInput" step="0.01" min="0.01" required>
+          </div>
+          <div class="field-grp">
+            <label class="field-lbl" for="sellPriceInput">SELL PRICE ($)</label>
+            <input class="field-inp" type="number" id="sellPriceInput" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div id="sellProceedsDisplay" class="sell-proceeds"></div>
+        <div class="modal-foot">
+          <button type="button" id="sellCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" id="sellSubmitBtn" class="mbtn mbtn--confirm">CONFIRM SELL</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- App Logic -->
+  <script src="/static/app.js?v=5.0"></script>
+
+  <script>
+    (function() {
+      function tickClock() {
+        var t = new Date().toLocaleTimeString('en-GB', {hour12: false});
+        var el = document.getElementById('statusTime');
+        if (el) el.textContent = t + ' UTC';
+      }
+      tickClock();
+      setInterval(tickClock, 1000);
+    })();
+  </script>
+
+</body>
+</html>
