@@ -5,9 +5,14 @@ import httpx
 import logging
 import os
 import time
+from datetime import datetime, date as _date, timedelta
 import pandas as pd
 import yfinance as yf
 import re
+try:
+    import pytz as _pytz
+except ImportError:
+    _pytz = None
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +320,85 @@ def _validate_ticker(ticker: str) -> tuple[bool, str]:
     _TICKER_CACHE[ticker] = (now,) + result
     return result
 
+# ─── Daily snapshot helpers (3× per day: open / midday / close) ──────────────
+
+_SLOT_ORDER = {"open": 0, "midday": 1, "close": 2, "eod": 2}
+
+def _current_market_slot() -> str:
+    """Return 'open', 'midday', or 'close' based on current US Eastern time."""
+    try:
+        if _pytz:
+            et = _pytz.timezone("America/New_York")
+            now_et = datetime.now(et)
+        else:
+            import datetime as _dt
+            now_et = _dt.datetime.utcnow()  # rough fallback
+        mins = now_et.hour * 60 + now_et.minute
+        if mins < 12 * 60 + 45:
+            return "open"
+        if mins < 16 * 60:
+            return "midday"
+        return "close"
+    except Exception:
+        return "close"
+
+def _snapshot_doc(portfolio_id: str, total_balance: float, invested_value: float,
+                  cash_value: float, slot: str) -> dict:
+    return {
+        "date":           _date.today().isoformat(),
+        "slot":           slot,
+        "total_value":    round(total_balance, 2),
+        "invested_value": round(invested_value, 2),
+        "cash_value":     round(cash_value, 2),
+        "timestamp":      datetime.utcnow().isoformat() + "Z",
+    }
+
+def _maybe_record_snapshot(portfolio_id: str, total_balance: float, invested_value: float, cash_value: float):
+    """Insert a snapshot for the current slot only if one doesn't already exist."""
+    if db is None:
+        return
+    try:
+        slot      = _current_market_slot()
+        today_str = _date.today().isoformat()
+        hist_col  = db[_safe_collection_name(portfolio_id) + "_history"]
+        if not hist_col.find_one({"date": today_str, "slot": slot}):
+            hist_col.insert_one(_snapshot_doc(portfolio_id, total_balance, invested_value, cash_value, slot))
+    except Exception as exc:
+        logger.warning("Snapshot write failed: %s", exc)
+
+def _force_record_snapshot(portfolio_id: str, total_balance: float, invested_value: float,
+                            cash_value: float) -> dict:
+    """Always upsert a snapshot for the current slot today (manual button)."""
+    slot      = _current_market_slot()
+    today_str = _date.today().isoformat()
+    doc       = _snapshot_doc(portfolio_id, total_balance, invested_value, cash_value, slot)
+    if db is not None:
+        hist_col = db[_safe_collection_name(portfolio_id) + "_history"]
+        hist_col.update_one({"date": today_str, "slot": slot}, {"$set": doc}, upsert=True)
+    return doc
+
+# ─── Market data caches ───────────────────────────────────────────────────────
+
+_TAPE_SYMBOLS = [
+    ("SPY",      "SPY"),
+    ("QQQ",      "QQQ"),
+    ("BTC-USD",  "BTC/USD"),
+    ("^VIX",     "VIX"),
+    ("NVDA",     "NVDA"),
+    ("TSLA",     "TSLA"),
+    ("AAPL",     "AAPL"),
+    ("GC=F",     "GOLD"),
+    ("EURUSD=X", "EUR/USD"),
+    ("AMZN",     "AMZN"),
+    ("MSFT",     "MSFT"),
+    ("META",     "META"),
+]
+_TAPE_CACHE: dict = {"data": None, "ts": 0.0}
+_TAPE_TTL   = 300   # 5 minutes
+
+_FNG_CACHE: dict = {"data": None, "ts": 0.0}
+_FNG_TTL    = 3600  # 1 hour
+
 # ─── Portfolio routes ──────────────────────────────────────────────────────────
 
 @router.get("/portfolios")
@@ -322,12 +406,28 @@ def _validate_ticker(ticker: str) -> tuple[bool, str]:
 async def get_default_portfolio():
     return await get_portfolio("4RCH3R")
 
+# @router.get("/portfolios/list")
+# async def list_portfolio_names():
+#     if db is None:
+#         return {"portfolios": [], "warning": "Database disconnected"}
+#     collections = db.list_collection_names()
+#     return {"portfolios": [c for c in collections if not c.startswith("system.")]}
+
+
 @router.get("/portfolios/list")
 async def list_portfolio_names():
     if db is None:
         return {"portfolios": [], "warning": "Database disconnected"}
+    
     collections = db.list_collection_names()
-    return {"portfolios": [c for c in collections if not c.startswith("system.")]}
+    
+    # Filter out system collections AND those containing "_history"
+    filtered_portfolios = [
+        c for c in collections 
+        if not c.startswith("system.") and "_history" not in c
+    ]
+    
+    return {"portfolios": filtered_portfolios}
 
 @router.post("/portfolios/upload")
 async def upload_portfolio(file: UploadFile = File(...)):
@@ -475,6 +575,8 @@ async def get_portfolio(portfolio_id: str):
         combined_prev     = total_previous_close_value + cash_val
         daily_change_pct  = ((combined_current - combined_prev) / combined_prev * 100) if combined_prev > 0 else 0
 
+        _maybe_record_snapshot(portfolio_id, combined_current, invested_val, cash_val)
+
         return {
             "invested_value":   float(round(invested_val, 2)),
             "cash_value":       float(round(cash_val, 2)),
@@ -519,31 +621,133 @@ async def add_position(portfolio_id: str, request: dict):
     ticker   = request.get("ticker", "").strip().upper()
     shares   = request.get("shares")
     avg_cost = request.get("average_cost")
+    action   = request.get("action", "buy")   # "buy" (default) or "edit"
 
     if not ticker or ticker == "CASH":
         raise HTTPException(status_code=400, detail="Invalid ticker")
-    if shares is None or shares <= 0:
+    if shares is None or float(shares) <= 0:
         raise HTTPException(status_code=400, detail="Shares must be a positive number")
-    if avg_cost is None or avg_cost < 0:
+    if avg_cost is None or float(avg_cost) < 0:
         raise HTTPException(status_code=400, detail="Average cost required and must be non-negative")
 
-    # Run blocking yfinance call in a thread pool to avoid blocking the event loop
-    loop = asyncio.get_running_loop()
-    is_valid, error_msg = await loop.run_in_executor(None, _validate_ticker, ticker)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+    collection = db[_safe_collection_name(portfolio_id)]
+    existing   = collection.find_one({"ticker": ticker})
+
+    if action == "buy":
+        # Check cash sufficiency before anything else
+        total_cost = float(shares) * float(avg_cost)
+        cash_doc     = collection.find_one({"ticker": "CASH"})
+        current_cash = float(cash_doc.get("shares", 0)) if cash_doc else 0.0
+        if current_cash < total_cost:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient cash. Need ${total_cost:,.2f} but only ${current_cash:,.2f} available."
+            )
+
+        # Validate ticker only for brand-new positions
+        if not existing:
+            loop = asyncio.get_running_loop()
+            is_valid, error_msg = await loop.run_in_executor(None, _validate_ticker, ticker)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=error_msg)
+
+        # Merge into existing position (weighted average) or insert new
+        if existing:
+            old_shares   = float(existing.get("shares", 0))
+            old_avg_cost = float(existing.get("average_cost", existing.get("avg_cost", 0)))
+            new_total    = old_shares + float(shares)
+            new_avg      = (old_shares * old_avg_cost + float(shares) * float(avg_cost)) / new_total
+            collection.update_one(
+                {"ticker": ticker},
+                {"$set": {"shares": new_total, "average_cost": new_avg}},
+            )
+        else:
+            collection.insert_one({
+                "ticker":       ticker,
+                "shares":       float(shares),
+                "average_cost": float(avg_cost),
+            })
+
+        # Deduct cost from cash
+        collection.update_one(
+            {"ticker": "CASH"},
+            {"$inc": {"shares": -total_cost}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
+            upsert=True,
+        )
+    else:
+        # Edit mode: correct position data without touching cash
+        if not existing:
+            loop = asyncio.get_running_loop()
+            is_valid, error_msg = await loop.run_in_executor(None, _validate_ticker, ticker)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=error_msg)
+        collection.update_one(
+            {"ticker": ticker},
+            {"$set": {"ticker": ticker, "shares": float(shares), "average_cost": float(avg_cost)}},
+            upsert=True,
+        )
+
+    return {"ticker": ticker, "shares": float(shares), "average_cost": float(avg_cost), "message": "Position saved"}
+
+
+@router.post("/portfolios/{portfolio_id}/positions/{ticker}/sell")
+async def sell_position(portfolio_id: str, ticker: str, request: dict):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    ticker_upper   = ticker.strip().upper()
+    shares_to_sell = request.get("shares")
+    sell_price     = request.get("sell_price")
+
+    if shares_to_sell is None:
+        raise HTTPException(status_code=400, detail="shares is required")
+    if sell_price is None:
+        raise HTTPException(status_code=400, detail="sell_price is required")
+    try:
+        shares_val = float(shares_to_sell)
+        price_val  = float(sell_price)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid shares or price value")
+    if shares_val <= 0:
+        raise HTTPException(status_code=400, detail="Shares must be positive")
+    if price_val < 0:
+        raise HTTPException(status_code=400, detail="Sell price must be non-negative")
 
     collection = db[_safe_collection_name(portfolio_id)]
+    existing   = collection.find_one({"ticker": ticker_upper})
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Position '{ticker_upper}' not found")
+
+    current_shares = float(existing.get("shares", 0))
+    if shares_val > current_shares + 0.0001:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot sell {shares_val:.4g} shares — only {current_shares:.4g} held."
+        )
+
+    proceeds = shares_val * price_val
+
+    if abs(shares_val - current_shares) < 0.0001:
+        collection.delete_one({"ticker": ticker_upper})
+    else:
+        collection.update_one(
+            {"ticker": ticker_upper},
+            {"$set": {"shares": round(current_shares - shares_val, 10)}}
+        )
+
+    # Credit proceeds to cash
     collection.update_one(
-        {"ticker": ticker},
-        {"$set": {
-            "ticker":       ticker,
-            "shares":       float(shares),
-            "average_cost": float(avg_cost),
-        }},
+        {"ticker": "CASH"},
+        {"$inc": {"shares": proceeds}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
         upsert=True,
     )
-    return {"ticker": ticker, "shares": shares, "average_cost": avg_cost, "message": "Position added/updated"}
+
+    return {
+        "message":          f"Sold {shares_val} shares of {ticker_upper} @ ${price_val:.2f}",
+        "proceeds":         round(proceeds, 2),
+        "ticker":           ticker_upper,
+        "remaining_shares": max(0.0, round(current_shares - shares_val, 10)) if abs(shares_val - current_shares) >= 0.0001 else 0.0,
+    }
 
 # ─── Cash management ──────────────────────────────────────────────────────────
 
@@ -597,6 +801,235 @@ async def withdraw_cash(portfolio_id: str, request: dict):
     updated_doc = collection.find_one({"ticker": "CASH"})
     new_cash    = float(updated_doc.get("shares", 0)) if updated_doc else 0
     return {"message": "Cash withdrawn", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
+
+# ─── Portfolio heartrate (snapshots) ──────────────────────────────────────────
+
+@router.get("/portfolios/{portfolio_id}/snapshots/export")
+async def export_snapshots(portfolio_id: str):
+    from fastapi.responses import StreamingResponse
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    hist_col  = db[_safe_collection_name(portfolio_id) + "_history"]
+    raw       = list(hist_col.find({}, {"_id": 0}).sort("date", 1))
+    raw.sort(key=lambda s: (s.get("date", ""), _SLOT_ORDER.get(s.get("slot", "close"), 2)))
+    if not raw:
+        raise HTTPException(status_code=404, detail="No historical data found for this portfolio")
+
+    df   = pd.DataFrame(raw)
+    keep = [c for c in ["date", "slot", "total_value", "invested_value", "cash_value"] if c in df.columns]
+    df   = df[keep].rename(columns={
+        "date": "Date", "slot": "Slot",
+        "total_value": "Total Value ($)",
+        "invested_value": "Invested Value ($)",
+        "cash_value": "Cash Value ($)",
+    })
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Portfolio History", index=False)
+    output.seek(0)
+
+    safe_name = _safe_collection_name(portfolio_id)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_history.xlsx"'},
+    )
+
+
+@router.get("/portfolios/{portfolio_id}/snapshots")
+async def get_snapshots(portfolio_id: str, period: str = "1w"):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    today    = _date.today()
+    period_map = {
+        "1w": timedelta(weeks=1),
+        "1m": timedelta(days=30),
+        "3m": timedelta(days=90),
+        "6m": timedelta(days=180),
+        "1y": timedelta(days=365),
+    }
+
+    hist_col = db[_safe_collection_name(portfolio_id) + "_history"]
+    query    = {}
+    if period in period_map:
+        query["date"] = {"$gte": (today - period_map[period]).isoformat()}
+
+    raw       = list(hist_col.find(query, {"_id": 0}))
+    snapshots = sorted(raw, key=lambda s: (s.get("date", ""), _SLOT_ORDER.get(s.get("slot", "close"), 2)))
+
+    pct_change = 0.0
+    if len(snapshots) >= 2:
+        first_val  = snapshots[0].get("total_value", 0) or 0
+        last_val   = snapshots[-1].get("total_value", 0) or 0
+        pct_change = round(((last_val - first_val) / first_val * 100) if first_val else 0, 2)
+
+    return {"snapshots": snapshots, "period": period, "pct_change": pct_change}
+
+
+@router.post("/portfolios/{portfolio_id}/snapshot")
+async def take_manual_snapshot(portfolio_id: str):
+    """Force-record a snapshot for the current slot, replacing any existing one today."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    collection_name = _safe_collection_name(portfolio_id)
+    if collection_name not in db.list_collection_names():
+        raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
+    # Reuse get_portfolio to obtain live values (it also calls _maybe_record_snapshot,
+    # but we then force-overwrite with _force_record_snapshot)
+    portfolio_data = await get_portfolio(portfolio_id)
+    doc = _force_record_snapshot(
+        portfolio_id,
+        portfolio_data["total_balance"],
+        portfolio_data["invested_value"],
+        portfolio_data["cash_value"],
+    )
+    return {"message": f"Snapshot recorded (slot: {doc['slot']})", "snapshot": doc}
+
+
+@router.post("/portfolios/{portfolio_id}/snapshots/import")
+async def import_snapshots(portfolio_id: str, file: UploadFile = File(...)):
+    """Import historical snapshots from an Excel file.
+    Expected columns (by name or position): date, total_value, invested_value, cash_value.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
+
+    try:
+        raw_bytes = await file.read()
+        df = pd.read_excel(BytesIO(raw_bytes), header=0)
+        df.columns = [str(c).strip().lower() for c in df.columns]
+
+        # Map columns by name, then fall back to position
+        col_list = list(df.columns)
+        def _find_col(keywords, pos):
+            for c in col_list:
+                if any(kw in c for kw in keywords):
+                    return c
+            return col_list[pos] if len(col_list) > pos else None
+
+        date_col     = _find_col(["date"], 0)
+        total_col    = _find_col(["total"], 1)
+        invested_col = _find_col(["invest"], 2)
+        cash_col     = _find_col(["cash"], 3)
+
+        if not date_col:
+            raise HTTPException(status_code=400, detail="Cannot find a date column")
+
+        hist_col = db[_safe_collection_name(portfolio_id) + "_history"]
+        inserted, errors = 0, []
+
+        for _, row in df.iterrows():
+            try:
+                raw_date = str(row[date_col]).strip()
+                # Normalise to YYYY-MM-DD
+                raw_date = re.sub(r"[/\\]", "-", raw_date)[:10]
+                if not raw_date or raw_date.lower() == "nan":
+                    continue
+
+                doc = {
+                    "date":           raw_date,
+                    "slot":           "eod",
+                    "total_value":    _to_float(row.get(total_col)    if total_col    else 0),
+                    "invested_value": _to_float(row.get(invested_col) if invested_col else 0),
+                    "cash_value":     _to_float(row.get(cash_col)     if cash_col     else 0),
+                    "timestamp":      datetime.utcnow().isoformat() + "Z",
+                }
+                hist_col.update_one({"date": raw_date, "slot": "eod"}, {"$set": doc}, upsert=True)
+                inserted += 1
+            except Exception as row_err:
+                errors.append(str(row_err))
+
+        return {"message": f"Imported {inserted} snapshot(s)", "inserted": inserted,
+                "errors": errors[:10]}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Import failed: {exc}")
+
+
+# ─── Market data ───────────────────────────────────────────────────────────────
+
+@router.get("/market/ticker-tape")
+async def get_ticker_tape():
+    """Return current prices for the dashboard ticker tape (5-min cache)."""
+    now = time.time()
+    if _TAPE_CACHE["data"] and now - _TAPE_CACHE["ts"] < _TAPE_TTL:
+        return _TAPE_CACHE["data"]
+
+    def _fetch():
+        tickers = [s[0] for s in _TAPE_SYMBOLS]
+        try:
+            data = yf.download(tickers, period="2d", group_by="ticker", progress=False)
+        except Exception as e:
+            logger.error("Ticker tape bulk download failed: %s", e)
+            return []
+
+        results = []
+        for yf_sym, display in _TAPE_SYMBOLS:
+            try:
+                df = data if len(tickers) == 1 else data[yf_sym]
+                if df.empty or len(df) < 1:
+                    continue
+                curr = float(df["Close"].iloc[-1])
+                prev = float(df["Close"].iloc[-2]) if len(df) >= 2 else curr
+                if pd.isna(curr):
+                    continue
+                pct = ((curr - prev) / prev * 100) if (prev and not pd.isna(prev)) else 0.0
+                results.append({
+                    "symbol":     yf_sym,
+                    "display":    display,
+                    "price":      round(curr, 4 if ("USD" in yf_sym or yf_sym.startswith("EUR")) else 2),
+                    "change_pct": round(pct, 2),
+                    "direction":  "up" if pct > 0.005 else ("down" if pct < -0.005 else "flat"),
+                })
+            except Exception as e:
+                logger.warning("Tape item error %s: %s", yf_sym, e)
+        return results
+
+    loop  = asyncio.get_running_loop()
+    items = await loop.run_in_executor(None, _fetch)
+    result = {"items": items, "updated_at": datetime.utcnow().isoformat() + "Z"}
+    _TAPE_CACHE["data"] = result
+    _TAPE_CACHE["ts"]   = now
+    return result
+
+
+@router.get("/market/fear-greed")
+async def get_fear_greed():
+    """Return CNN Fear & Greed Index (1-hour cache) via fear-and-greed library."""
+    now = time.time()
+    if _FNG_CACHE["data"] and now - _FNG_CACHE["ts"] < _FNG_TTL:
+        return _FNG_CACHE["data"]
+
+    def _fetch():
+        import fear_and_greed
+        return fear_and_greed.get()
+
+    try:
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, _fetch)
+        result = {
+            "score":            round(float(data.value), 1),
+            "rating":           data.description,
+            "previous_close":   None,
+            "previous_1_week":  None,
+            "previous_1_month": None,
+            "previous_1_year":  None,
+            "timestamp":        data.last_update.isoformat() if data.last_update else "",
+        }
+        _FNG_CACHE["data"] = result
+        _FNG_CACHE["ts"]   = now
+        return result
+    except Exception as exc:
+        logger.warning("Fear & Greed fetch failed: %s", exc)
+        if _FNG_CACHE["data"]:
+            return _FNG_CACHE["data"]
+        raise HTTPException(status_code=502, detail=f"Fear & Greed index unavailable: {exc}")
 
 # ─── AI chat ──────────────────────────────────────────────────────────────────
 

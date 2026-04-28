@@ -1,5 +1,5 @@
 /*****************************************************************************/
-/* Investment Strategist Dashboard — Main Application Logic  v4.2           */
+/* Investment Strategist Dashboard — Main Application Logic  v5.1           */
 /*****************************************************************************/
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -42,14 +42,37 @@ document.addEventListener("DOMContentLoaded", () => {
   const cashCancelBtn   = document.getElementById("cashCancelBtn");
   const cashSubmitBtn   = document.getElementById("cashSubmitBtn");
 
-  // Position modal
-  const positionModal = document.getElementById("positionModal");
-  const modalTitle    = document.getElementById("modalTitle");
-  const positionForm  = document.getElementById("positionForm");
-  const tickerInput   = document.getElementById("tickerInput");
-  const sharesInput   = document.getElementById("sharesInput");
-  const costInput     = document.getElementById("costInput");
-  const cancelBtn     = document.getElementById("cancelBtn");
+  // Position (buy/edit) modal
+  const positionModal        = document.getElementById("positionModal");
+  const modalTitle           = document.getElementById("modalTitle");
+  const positionForm         = document.getElementById("positionForm");
+  const tickerInput          = document.getElementById("tickerInput");
+  const sharesInput          = document.getElementById("sharesInput");
+  const costInput            = document.getElementById("costInput");
+  const cancelBtn            = document.getElementById("cancelBtn");
+  const availableCashDisplay = document.getElementById("availableCashDisplay");
+  const availableCashGroup   = document.getElementById("availableCashGroup");
+  const buyCostDisplay       = document.getElementById("buyCostDisplay");
+
+  // Sell modal
+  const sellModal          = document.getElementById("sellModal");
+  const sellForm           = document.getElementById("sellForm");
+  const sellTickerLabel    = document.getElementById("sellTickerLabel");
+  const sellAvailableLabel = document.getElementById("sellAvailableLabel");
+  const sellSharesInput    = document.getElementById("sellSharesInput");
+  const sellPriceInput     = document.getElementById("sellPriceInput");
+  const sellProceedsDisplay = document.getElementById("sellProceedsDisplay");
+  const sellCancelBtn      = document.getElementById("sellCancelBtn");
+  const sellSubmitBtn      = document.getElementById("sellSubmitBtn");
+
+  // Heartrate chart
+  const exportHistoryBtn     = document.getElementById("exportHistoryBtn");
+  const importHistoryBtn     = document.getElementById("importHistoryBtn");
+  const snapshotImportInput  = document.getElementById("snapshotImportInput");
+  const takeSnapshotBtn      = document.getElementById("takeSnapshotBtn");
+  const heartrateChange      = document.getElementById("heartrateChange");
+  const chartEmptyEl         = document.getElementById("chartEmpty");
+  const portfolioChartEl     = document.getElementById("portfolioChart");
 
   /**************************************************************************
    * SECTION 2 · STATE
@@ -58,9 +81,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let isEditing          = false;
   let lastPortfolioData  = null;
 
+  // Sell modal state
+  let sellTicker    = null;
+  let sellMaxShares = 0;
+
+  // Chart state
+  let portfolioChart = null;
+  let currentPeriod  = "1w";
+
   // Sort state — default: descending by daily change
   let sortKey = "daily_change";
-  let sortDir = -1; // -1 = descending, 1 = ascending
+  let sortDir = -1;
+
+  // Ticker tape animation frame id
+  let tickerAnimId = null;
 
   /**************************************************************************
    * SECTION 3 · FORMATTERS
@@ -183,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * SECTION 9 · STATUS MONITOR
    **************************************************************************/
   function updateStatusIndicators() {
-    const mongoStatus  = document.getElementById("mongoStatus");
+    const mongoStatus    = document.getElementById("mongoStatus");
     const mongoStatusDot = document.getElementById("mongoStatusDot");
     fetch("/api/portfolios/list")
       .then((resp) => {
@@ -222,7 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
    * SECTION 11 · SORT HELPERS
    **************************************************************************/
   function sortPositions(positions) {
-    // Augment each position with computed fields needed for sort keys
     const augmented = positions.map((p) => {
       const price = Number(p.current_price || 0);
       const cost  = Number(p.average_cost  || 0);
@@ -253,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**************************************************************************
-   * SECTION 12 · HOLDINGS RENDERER (sort + DOM, no fetch)
+   * SECTION 12 · HOLDINGS RENDERER
    **************************************************************************/
   function renderHoldings(data) {
     const totalValue   = Number(data.total_balance || 0);
@@ -295,21 +328,19 @@ document.addEventListener("DOMContentLoaded", () => {
         <td class="col-num ${totalPnLPct  >= 0 ? "success" : "negative"}">${formatPercent(totalPnLPct)}</td>
         <td class="col-num ${totalPnL    >= 0 ? "success" : "negative"}">${formatCurrency(totalPnL)}</td>
         <td class="col-ops">
-          <button class="btn-edit"   data-ticker="${stock.ticker}" title="Edit ${stock.ticker}">
+          <button class="btn-edit" data-ticker="${stock.ticker}" title="Edit ${stock.ticker}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
             Edit
           </button>
-          <button class="btn-delete" data-ticker="${stock.ticker}" title="Delete ${stock.ticker}">
+          <button class="btn-sell" data-ticker="${stock.ticker}" data-shares="${shares}" data-price="${currentPrice}" title="Sell ${stock.ticker}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
             </svg>
-            Delete
+            Sell
           </button>
         </td>
       `;
@@ -326,32 +357,14 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // Delete buttons
-    holdingsBody.querySelectorAll(".btn-delete").forEach((button) => {
-      button.addEventListener("click", async () => {
+    // Sell buttons
+    holdingsBody.querySelectorAll(".btn-sell").forEach((button) => {
+      button.addEventListener("click", () => {
         const ticker = button.dataset.ticker;
+        const shares = parseFloat(button.dataset.shares) || 0;
+        const price  = parseFloat(button.dataset.price)  || 0;
         if (!ticker || !currentPortfolioId) return;
-
-        const confirmed = await showConfirm(
-          "DELETE POSITION",
-          `Remove ${ticker} from this portfolio? This cannot be undone.`
-        );
-        if (!confirmed) return;
-
-        try {
-          const response = await fetch(
-            `/api/portfolios/${currentPortfolioId}/positions/${ticker}`,
-            { method: "DELETE" }
-          );
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.detail || `HTTP ${response.status}`);
-          }
-          showToast(`${ticker} removed from portfolio`, "success");
-          loadSummary();
-        } catch (error) {
-          showToast(error.message || "Failed to delete position", "error");
-        }
+        openSellModal(ticker, shares, price);
       });
     });
 
@@ -399,6 +412,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         renderHoldings(data);
         updateStatusIndicators();
+        loadHeartrate(currentPeriod);
       })
       .catch((err) => {
         console.error("Load Summary Error:", err);
@@ -569,18 +583,33 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /**************************************************************************
-   * SECTION 15 · POSITION MODAL
+   * SECTION 15 · BUY / EDIT POSITION MODAL
    **************************************************************************/
+  const updateBuyCost = () => {
+    if (!buyCostDisplay || isEditing) return;
+    const shares = parseFloat(sharesInput?.value) || 0;
+    const price  = parseFloat(costInput?.value)   || 0;
+    const total  = shares * price;
+    buyCostDisplay.textContent = total > 0 ? `TOTAL COST: ${formatCurrency(total)}` : "";
+  };
+
   function openPositionModal(isEdit = false, stockData = null) {
     if (!positionModal) return;
     isEditing = isEdit;
-    if (modalTitle) modalTitle.textContent = isEdit ? "EDIT POSITION" : "ADD POSITION";
 
-    if (isEdit && stockData) {
-      if (tickerInput) { tickerInput.value = stockData.ticker || ""; tickerInput.disabled = true; }
-      if (sharesInput) sharesInput.value = stockData.shares || "";
-      if (costInput)   costInput.value   = stockData.average_cost || "";
+    if (isEdit) {
+      if (modalTitle) modalTitle.textContent = "EDIT POSITION";
+      if (availableCashGroup) availableCashGroup.style.display = "none";
+      if (buyCostDisplay) buyCostDisplay.textContent = "";
+      if (tickerInput) { tickerInput.value = stockData?.ticker || ""; tickerInput.disabled = true; }
+      if (sharesInput) sharesInput.value = stockData?.shares || "";
+      if (costInput)   costInput.value   = stockData?.average_cost || "";
     } else {
+      if (modalTitle) modalTitle.textContent = "BUY POSITION";
+      if (availableCashGroup) availableCashGroup.style.display = "";
+      const cash = lastPortfolioData?.cash_value || 0;
+      if (availableCashDisplay) availableCashDisplay.textContent = formatCurrency(cash);
+      if (buyCostDisplay) buyCostDisplay.textContent = "";
       if (tickerInput) { tickerInput.value = ""; tickerInput.disabled = false; }
       if (sharesInput) sharesInput.value = "";
       if (costInput)   costInput.value   = "";
@@ -596,11 +625,12 @@ document.addEventListener("DOMContentLoaded", () => {
     positionForm?.reset();
     clearFieldErrors(positionModal);
     if (tickerInput) tickerInput.disabled = false;
+    if (buyCostDisplay) buyCostDisplay.textContent = "";
   }
 
   tickerInput?.addEventListener("input", () => setFieldError(tickerInput, ""));
-  sharesInput?.addEventListener("input", () => setFieldError(sharesInput, ""));
-  costInput?.addEventListener("input",   () => setFieldError(costInput,   ""));
+  sharesInput?.addEventListener("input", () => { setFieldError(sharesInput, ""); updateBuyCost(); });
+  costInput?.addEventListener("input",   () => { setFieldError(costInput,   ""); updateBuyCost(); });
 
   positionForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -631,7 +661,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(`/api/portfolios/${currentPortfolioId}/positions`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, shares, average_cost }),
+        body: JSON.stringify({ ticker, shares, average_cost, action: isEditing ? "edit" : "buy" }),
       });
 
       if (!response.ok) {
@@ -645,7 +675,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      showToast(`${ticker} saved successfully`, "success");
+      showToast(`${ticker} ${isEditing ? "updated" : "bought"} successfully`, "success");
       closePositionModal();
       loadSummary();
     } catch (error) {
@@ -656,7 +686,96 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /**************************************************************************
-   * SECTION 16 · CASH MODAL
+   * SECTION 16 · SELL MODAL
+   **************************************************************************/
+  const updateSellProceeds = () => {
+    const shares   = parseFloat(sellSharesInput?.value)  || 0;
+    const price    = parseFloat(sellPriceInput?.value)   || 0;
+    const proceeds = shares * price;
+    if (sellProceedsDisplay) {
+      sellProceedsDisplay.textContent = proceeds > 0 ? `PROCEEDS: ${formatCurrency(proceeds)}` : "";
+    }
+  };
+
+  function openSellModal(ticker, availableShares, currentPrice) {
+    if (!sellModal) return;
+    sellTicker    = ticker;
+    sellMaxShares = availableShares;
+
+    if (sellTickerLabel)    sellTickerLabel.textContent    = ticker;
+    if (sellAvailableLabel) sellAvailableLabel.textContent = `${availableShares} shares`;
+    if (sellSharesInput)    { sellSharesInput.value = ""; sellSharesInput.max = availableShares; }
+    if (sellPriceInput)     sellPriceInput.value = currentPrice > 0 ? currentPrice.toFixed(2) : "";
+    if (sellProceedsDisplay) sellProceedsDisplay.textContent = "";
+
+    clearFieldErrors(sellModal);
+    sellModal.classList.add("active");
+    sellSharesInput?.focus();
+    updateSellProceeds();
+  }
+
+  function closeSellModal() {
+    sellModal?.classList.remove("active");
+    sellForm?.reset();
+    clearFieldErrors(sellModal);
+    sellTicker    = null;
+    sellMaxShares = 0;
+  }
+
+  sellSharesInput?.addEventListener("input", () => { setFieldError(sellSharesInput, ""); updateSellProceeds(); });
+  sellPriceInput?.addEventListener("input",  () => { setFieldError(sellPriceInput,  ""); updateSellProceeds(); });
+
+  sellForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const shares     = parseFloat(sellSharesInput?.value);
+    const sell_price = parseFloat(sellPriceInput?.value);
+    let hasError = false;
+
+    if (!shares || shares <= 0) {
+      setFieldError(sellSharesInput, "Must be a positive number");
+      hasError = true;
+    } else if (shares > sellMaxShares + 0.0001) {
+      setFieldError(sellSharesInput, `Cannot exceed ${sellMaxShares} available shares`);
+      hasError = true;
+    }
+    if (isNaN(sell_price) || sell_price < 0) {
+      setFieldError(sellPriceInput, "Must be zero or greater");
+      hasError = true;
+    }
+    if (hasError) return;
+
+    const origText = sellSubmitBtn?.textContent;
+    if (sellSubmitBtn) { sellSubmitBtn.disabled = true; sellSubmitBtn.textContent = "PROCESSING…"; }
+
+    try {
+      const response = await fetch(
+        `/api/portfolios/${currentPortfolioId}/positions/${encodeURIComponent(sellTicker)}/sell`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shares, sell_price }),
+        }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        showToast(errData.detail || `Sell failed (${response.status})`, "error");
+        return;
+      }
+
+      const result = await response.json();
+      showToast(`Sold ${shares} shares of ${sellTicker} — ${formatCurrency(result.proceeds)} added to cash`, "success");
+      closeSellModal();
+      loadSummary();
+    } catch (error) {
+      showToast(error.message || "Network error", "error");
+    } finally {
+      if (sellSubmitBtn) { sellSubmitBtn.disabled = false; sellSubmitBtn.textContent = origText; }
+    }
+  });
+
+  /**************************************************************************
+   * SECTION 17 · CASH MODAL
    **************************************************************************/
   function openCashModal(isDeposit = true) {
     if (!cashModal) return;
@@ -712,7 +831,213 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /**************************************************************************
-   * SECTION 17 · EVENT WIRING + INIT
+   * SECTION 18 · PORTFOLIO HEARTRATE CHART
+   **************************************************************************/
+  async function loadHeartrate(period) {
+    if (!currentPortfolioId) return;
+    currentPeriod = period;
+
+    document.querySelectorAll(".period-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.period === period);
+    });
+
+    try {
+      const resp = await fetch(`/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshots?period=${period}`);
+      if (!resp.ok) return;
+      const data      = await resp.json();
+      const snapshots = data.snapshots || [];
+
+      if (snapshots.length < 2) {
+        if (chartEmptyEl)     chartEmptyEl.style.display    = "flex";
+        if (portfolioChartEl) portfolioChartEl.style.display = "none";
+        if (heartrateChange)  heartrateChange.textContent   = "";
+        if (portfolioChart)   { portfolioChart.destroy(); portfolioChart = null; }
+        return;
+      }
+
+      if (chartEmptyEl)     chartEmptyEl.style.display    = "none";
+      if (portfolioChartEl) portfolioChartEl.style.display = "block";
+
+      if (heartrateChange) {
+        const pct = data.pct_change || 0;
+        heartrateChange.textContent = formatPercent(pct);
+        heartrateChange.style.color = pct >= 0 ? "var(--gain)" : "var(--loss)";
+      }
+
+      // Build labels: show slot suffix when multiple data points exist for the same date
+      const dateCounts = {};
+      snapshots.forEach((s) => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
+      const SLOT_LABEL = { open: "open", midday: "mid", close: "cls", eod: "" };
+      const labels = snapshots.map((s) => {
+        const suffix = dateCounts[s.date] > 1 && s.slot ? ` ${SLOT_LABEL[s.slot] || s.slot}` : "";
+        return s.date + suffix;
+      });
+      const values = snapshots.map((s) => s.total_value);
+      const isUp      = (values[values.length - 1] || 0) >= (values[0] || 0);
+      const lineColor = isUp ? "#00d97e" : "#ff4560";
+      const fillColor = isUp ? "rgba(0,217,126,0.07)" : "rgba(255,69,96,0.07)";
+
+      if (portfolioChart) portfolioChart.destroy();
+
+      const ctx = portfolioChartEl.getContext("2d");
+      portfolioChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            data:                     values,
+            borderColor:              lineColor,
+            backgroundColor:          fillColor,
+            borderWidth:              1.5,
+            fill:                     true,
+            tension:                  0.3,
+            pointRadius:              0,
+            pointHoverRadius:         4,
+            pointHoverBackgroundColor: lineColor,
+          }],
+        },
+        options: {
+          responsive:          true,
+          maintainAspectRatio: false,
+          interaction:         { intersect: false, mode: "index" },
+          plugins: {
+            legend:  { display: false },
+            tooltip: {
+              backgroundColor: "#1b2a38",
+              borderColor:     "rgba(255,255,255,0.07)",
+              borderWidth:     1,
+              titleColor:      "#6b879e",
+              bodyColor:       "#d8e4ee",
+              titleFont: { family: "'IBM Plex Mono', monospace", size: 10 },
+              bodyFont:  { family: "'IBM Plex Mono', monospace", size: 12 },
+              callbacks: {
+                label: (ctx) => ` ${formatCurrency(ctx.raw)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid:   { color: "rgba(255,255,255,0.03)" },
+              border: { display: false },
+              ticks:  {
+                color:        "#2e4a60",
+                font:         { family: "'IBM Plex Mono', monospace", size: 9 },
+                maxTicksLimit: 8,
+                maxRotation:   0,
+              },
+            },
+            y: {
+              grid:   { color: "rgba(255,255,255,0.03)" },
+              border: { display: false },
+              ticks:  {
+                color: "#2e4a60",
+                font:  { family: "'IBM Plex Mono', monospace", size: 9 },
+                callback: (v) => "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }),
+              },
+            },
+          },
+        },
+      });
+    } catch (err) {
+      console.error("Heartrate chart error:", err);
+    }
+  }
+
+  /**************************************************************************
+   * SECTION 19 · TICKER TAPE (auto-refresh every 5 min)
+   **************************************************************************/
+  async function updateTickerTape() {
+    try {
+      const resp  = await fetch("/api/market/ticker-tape");
+      if (!resp.ok) return;
+      const data  = await resp.json();
+      const items = data.items || [];
+      if (!items.length) return;
+
+      const tape  = document.querySelector(".ticker-tape");
+      const track = document.querySelector(".ticker-track");
+      if (!tape || !track) return;
+
+      const fmtPrice = (price, sym) => {
+        if (sym === "EURUSD=X") return price.toFixed(4);
+        if (price >= 10000)     return price.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        return price.toFixed(2);
+      };
+
+      const itemHtml = items.map((it) => {
+        const cls   = it.direction === "up" ? "tick--gain" : (it.direction === "down" ? "tick--loss" : "tick--neutral");
+        const arrow = it.direction === "up" ? "▲" : (it.direction === "down" ? "▼" : "─");
+        const sign  = it.change_pct >= 0 ? "+" : "";
+        return `<span class="tick ${cls}">${it.display}&nbsp;${fmtPrice(it.price, it.symbol)}&nbsp;${arrow}&nbsp;${sign}${it.change_pct.toFixed(2)}%</span><span class="tick-sep">◆</span>`;
+      }).join("");
+
+      // Measure single-copy width, then fill track with enough copies to
+      // always span at least 2× the tape width so there is never empty space.
+      track.style.transform = "translateX(0)";
+      track.innerHTML = itemHtml;
+      const tapeW   = tape.offsetWidth;
+      const singleW = track.scrollWidth || 1;
+      const copies  = Math.max(2, Math.ceil((tapeW * 2) / singleW) + 1);
+      track.innerHTML = Array.from({ length: copies }, () => itemHtml).join("");
+
+      // Cancel the previous loop and start a new one that scrolls left by
+      // exactly singleW pixels before seamlessly wrapping back to 0.
+      if (tickerAnimId !== null) { cancelAnimationFrame(tickerAnimId); tickerAnimId = null; }
+      let pos = 0;
+      const step = () => {
+        pos -= 0.8;                          // ~48 px/s at 60 fps
+        if (pos <= -singleW) pos += singleW; // loop by one copy width
+        track.style.transform = `translateX(${pos}px)`;
+        tickerAnimId = requestAnimationFrame(step);
+      };
+      tickerAnimId = requestAnimationFrame(step);
+    } catch (e) {
+      console.error("Ticker tape error:", e);
+    }
+  }
+
+  /**************************************************************************
+   * SECTION 20 · FEAR & GREED WIDGET
+   **************************************************************************/
+  function fngColor(score) {
+    if (score <= 24) return "#ff4560";
+    if (score <= 44) return "#ff7043";
+    if (score <= 55) return "#f0b429";
+    if (score <= 75) return "#52c41a";
+    return "#00d97e";
+  }
+
+  function fngLabel(score) {
+    const n = Math.round(score || 0);
+    if (n <= 24) return "EXTREME FEAR";
+    if (n <= 44) return "FEAR";
+    if (n <= 55) return "NEUTRAL";
+    if (n <= 75) return "GREED";
+    return "EXTREME GREED";
+  }
+
+  async function loadFearGreed() {
+    try {
+      const resp = await fetch("/api/market/fear-greed");
+      if (!resp.ok) return;
+      const data  = await resp.json();
+      const score = data.score || 0;
+      const color = fngColor(score);
+
+      const scoreEl  = document.getElementById("fngScore");
+      const ratingEl = document.getElementById("fngRating");
+      const ringEl   = document.getElementById("fngRing");
+
+      if (scoreEl)  { scoreEl.textContent = Math.round(score); scoreEl.style.color = color; }
+      if (ratingEl) { ratingEl.textContent = (data.rating || "").toUpperCase(); ratingEl.style.color = color; }
+      if (ringEl)   { ringEl.style.borderColor = color; ringEl.style.boxShadow = `0 0 10px ${color}50`; }
+    } catch (e) {
+      console.error("Fear & Greed error:", e);
+    }
+  }
+
+  /**************************************************************************
+   * SECTION 21 · EVENT WIRING + INIT
    **************************************************************************/
   addPositionBtn?.addEventListener("click",  () => openPositionModal(false));
   cancelBtn?.addEventListener("click",       closePositionModal);
@@ -721,36 +1046,101 @@ document.addEventListener("DOMContentLoaded", () => {
   cashCancelBtn?.addEventListener("click",   closeCashModal);
   backButton?.addEventListener("click",      showLanding);
   uploadPortfolioButton?.addEventListener("click", openFilePicker);
+  sellCancelBtn?.addEventListener("click",   closeSellModal);
 
   // Backdrop click closes modals
   positionModal?.addEventListener("click", (e) => { if (e.target === positionModal) closePositionModal(); });
-  cashModal?.addEventListener("click",     (e) => { if (e.target === cashModal)     closeCashModal(); });
+  cashModal?.addEventListener("click",     (e) => { if (e.target === cashModal)     closeCashModal();     });
+  sellModal?.addEventListener("click",     (e) => { if (e.target === sellModal)     closeSellModal();     });
 
   // Escape closes any open modal
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (positionModal?.classList.contains("active")) closePositionModal();
     if (cashModal?.classList.contains("active"))     closeCashModal();
+    if (sellModal?.classList.contains("active"))     closeSellModal();
   });
 
   portfolioUpload?.addEventListener("change", (e) => uploadPortfolioFile(e.target.files[0]));
 
-  // Column sort header clicks — re-render cached data, no re-fetch
+  // Column sort header clicks
   document.querySelectorAll(".holdings-table th[data-sort]").forEach((th) => {
     th.addEventListener("click", () => {
       if (sortKey === th.dataset.sort) {
         sortDir = -sortDir;
       } else {
         sortKey = th.dataset.sort;
-        sortDir = sortKey === "ticker" ? 1 : -1; // ticker defaults ascending
+        sortDir = sortKey === "ticker" ? 1 : -1;
       }
       updateSortHeaders();
       if (lastPortfolioData) renderHoldings(lastPortfolioData);
     });
   });
 
+  // Period selector
+  document.querySelectorAll(".period-btn").forEach((btn) => {
+    btn.addEventListener("click", () => loadHeartrate(btn.dataset.period));
+  });
+
+  // Export history
+  exportHistoryBtn?.addEventListener("click", () => {
+    if (!currentPortfolioId) return;
+    window.location.href = `/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshots/export`;
+  });
+
+  // Import history
+  importHistoryBtn?.addEventListener("click", () => snapshotImportInput?.click());
+  snapshotImportInput?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentPortfolioId) return;
+    snapshotImportInput.value = "";
+    const origText = importHistoryBtn?.textContent;
+    if (importHistoryBtn) { importHistoryBtn.disabled = true; importHistoryBtn.textContent = "IMPORTING…"; }
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const resp = await fetch(
+        `/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshots/import`,
+        { method: "POST", body: fd }
+      );
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.detail || "Import failed");
+      showToast(`Imported ${result.inserted} snapshot(s)`, "success");
+      loadHeartrate(currentPeriod);
+    } catch (err) {
+      showToast(err.message || "Import failed", "error");
+    } finally {
+      if (importHistoryBtn) { importHistoryBtn.disabled = false; importHistoryBtn.textContent = origText; }
+    }
+  });
+
+  // Manual snapshot button
+  takeSnapshotBtn?.addEventListener("click", async () => {
+    if (!currentPortfolioId) return;
+    const origText = takeSnapshotBtn?.textContent;
+    if (takeSnapshotBtn) { takeSnapshotBtn.disabled = true; takeSnapshotBtn.textContent = "SAVING…"; }
+    try {
+      const resp = await fetch(
+        `/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshot`,
+        { method: "POST" }
+      );
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.detail || "Snapshot failed");
+      showToast(`Snapshot saved (slot: ${result.snapshot?.slot || "─"})`, "success");
+      loadHeartrate(currentPeriod);
+    } catch (err) {
+      showToast(err.message || "Snapshot failed", "error");
+    } finally {
+      if (takeSnapshotBtn) { takeSnapshotBtn.disabled = false; takeSnapshotBtn.textContent = origText; }
+    }
+  });
+
   // Initial state
   updateSortHeaders();
   updateStatusIndicators();
   loadPortfolios();
+  updateTickerTape();
+  setInterval(updateTickerTape, 5 * 60 * 1000);   // refresh tape every 5 min
+  loadFearGreed();
+  setInterval(loadFearGreed, 60 * 60 * 1000);      // refresh F&G every 1 hour
 });
