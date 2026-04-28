@@ -23,3 +23,5 @@ test_upload_debug.py
 debug_yfinance.py
 .pytest_cache
 old_files
+injection.py
+4RCH3R_history.xlsx
