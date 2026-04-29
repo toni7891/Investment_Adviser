@@ -946,6 +946,27 @@ a { color: var(--amber); }
 .act-btn--gain:hover  { background: rgba(0,217,126,0.18);  }
 .act-btn--amber:hover { background: rgba(240,180,41,0.18); }
 
+.panel-toggle-btn {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 99px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--rim);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.panel-toggle-btn:hover {
+  background: var(--amber-lo);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 .holdings-table-container {
   flex: 1;
   overflow-y: auto;
@@ -1127,6 +1148,8 @@ a { color: var(--amber); }
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  max-height: 800px;
+  transition: max-height 0.2s ease-out;
 }
 
 .chat-messages {
@@ -1596,6 +1619,9 @@ a { color: var(--amber); }
   position: relative;
   height: 200px;
   padding: 12px 20px 16px;
+  overflow: hidden;
+  max-height: 200px;
+  transition: max-height 0.2s ease-out;
 }
 
 .chart-empty {
@@ -1609,6 +1635,34 @@ a { color: var(--amber); }
   letter-spacing: 0.06em;
   text-align: center;
   padding: 0 40px;
+}
+
+/* ────────────────────────────────────
+   PANEL COLLAPSE
+────────────────────────────────────── */
+.heartrate-section.collapsed .heartrate-chart-wrap {
+  max-height: 0;
+}
+
+.ai-pane.collapsed .chat-container {
+  max-height: 0;
+}
+
+.heartrate-section.collapsed .pane-hdr,
+.ai-pane.collapsed .pane-hdr {
+  border-radius: 99px;
+  margin: 6px 12px;
+  border: 1px solid var(--rim);
+  cursor: pointer;
+}
+
+.heartrate-section.collapsed,
+.ai-pane.collapsed {
+  background: transparent;
+}
+
+.ai-pane.collapsed {
+  max-height: 42px;
 }
 
 #portfolioChart {

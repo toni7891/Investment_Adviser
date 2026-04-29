@@ -1194,6 +1194,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Panel collapse/expand
+  function setupPanelToggle(btnId, panelId) {
+    const btn = document.getElementById(btnId);
+    const panel = document.getElementById(panelId);
+    if (!btn || !panel) return;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCollapsed = panel.classList.toggle('collapsed');
+      btn.textContent = isCollapsed ? '▶ SHOW' : '⊟ HIDE';
+    });
+    panel.addEventListener('click', (e) => {
+      if (!panel.classList.contains('collapsed')) return;
+      panel.classList.remove('collapsed');
+      btn.textContent = '⊟ HIDE';
+    });
+  }
+
+  setupPanelToggle('aiPaneToggle', 'aiPane');
+  setupPanelToggle('heartrateToggle', 'heartrateSection');
+
   // Detect which page we're on and run the appropriate init
   const isLanding   = !!document.getElementById("landing-page");
   const isDashboard = !!document.getElementById("dashboard-page");

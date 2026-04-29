@@ -122,10 +122,13 @@
       </section>
 
       <!-- AI Strategist Pane -->
-      <aside class="ai-pane">
+      <aside class="ai-pane" id="aiPane">
         <div class="pane-hdr">
           <span class="pane-title">// AI STRATEGIST</span>
-          <span class="ai-tag">◉ LLM</span>
+          <div class="pane-actions">
+            <span class="ai-tag">◉ LLM</span>
+            <button type="button" class="panel-toggle-btn" id="aiPaneToggle">⊟ HIDE</button>
+          </div>
         </div>
         <div class="chat-container" id="chatContainer">
           <div class="chat-messages" id="chatMessages">
@@ -158,6 +161,7 @@
           <span id="heartrateChange" class="heartrate-change"></span>
         </div>
         <div class="heartrate-controls">
+          <button type="button" class="panel-toggle-btn" id="heartrateToggle">⊟ HIDE</button>
           <div class="period-tabs">
             <button class="period-btn active" data-period="1w">1W</button>
             <button class="period-btn" data-period="1m">1M</button>
