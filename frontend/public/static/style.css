@@ -1148,8 +1148,6 @@ a { color: var(--amber); }
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  max-height: 800px;
-  transition: max-height 0.2s ease-out;
 }
 
 .chat-messages {
@@ -1640,29 +1638,55 @@ a { color: var(--amber); }
 /* ────────────────────────────────────
    PANEL COLLAPSE
 ────────────────────────────────────── */
+
+/* Heartrate: collapse chart vertically */
 .heartrate-section.collapsed .heartrate-chart-wrap {
   max-height: 0;
 }
 
-.ai-pane.collapsed .chat-container {
-  max-height: 0;
-}
-
-.heartrate-section.collapsed .pane-hdr,
-.ai-pane.collapsed .pane-hdr {
+.heartrate-section.collapsed .pane-hdr {
   border-radius: 99px;
   margin: 6px 12px;
   border: 1px solid var(--rim);
   cursor: pointer;
 }
 
-.heartrate-section.collapsed,
-.ai-pane.collapsed {
+.heartrate-section.collapsed {
   background: transparent;
 }
 
+/* AI pane: collapse to a narrow vertical side strip */
+.main-grid {
+  transition: grid-template-columns 0.2s ease-out;
+}
+
+.main-grid:has(.ai-pane.collapsed) {
+  grid-template-columns: 1fr 42px;
+}
+
 .ai-pane.collapsed {
-  max-height: 56px;
+  overflow: hidden;
+  border-left: 1px solid var(--rim);
+}
+
+.ai-pane.collapsed .chat-container {
+  display: none;
+}
+
+.ai-pane.collapsed .pane-actions {
+  display: none;
+}
+
+.ai-pane.collapsed .pane-hdr {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  height: 100%;
+  width: 42px;
+  padding: 16px 12px;
+  border-bottom: none;
+  cursor: pointer;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 #portfolioChart {
