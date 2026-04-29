@@ -1206,13 +1206,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     panel.addEventListener('click', (e) => {
       if (!panel.classList.contains('collapsed')) return;
+      e.stopPropagation();
       panel.classList.remove('collapsed');
       btn.textContent = '⊟ HIDE';
     });
   }
-
-  setupPanelToggle('aiPaneToggle', 'aiPane');
-  setupPanelToggle('heartrateToggle', 'heartrateSection');
 
   // Detect which page we're on and run the appropriate init
   const isLanding   = !!document.getElementById("landing-page");
@@ -1223,6 +1221,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (isDashboard) {
+    setupPanelToggle('aiPaneToggle', 'aiPane');
+    setupPanelToggle('heartrateToggle', 'heartrateSection');
     currentPortfolioId = localStorage.getItem("currentPortfolioId") || null;
     if (!currentPortfolioId) {
       // No portfolio selected — send back to landing
