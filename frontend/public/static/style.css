@@ -1662,7 +1662,7 @@ a { color: var(--amber); }
 }
 
 .ai-pane.collapsed {
-  max-height: 42px;
+  max-height: 56px;
 }
 
 #portfolioChart {
