@@ -1,0 +1,44 @@
+<h2>3 implementation approaches</h2>
+<p class="subtitle">All produce the same Option C pill result — they differ in how the transition is handled.</p>
+
+<div class="options" style="flex-direction:column; gap:16px; margin-top:20px;">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Instant swap — no animation</h3>
+      <p>A toggle button in each section header. Click → section disappears instantly, a small pill button appears in its place. Click pill → section reappears. Pure JS class toggle + CSS <code>display:none</code>. Zero animation complexity.</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Simplest code</li><li>No layout edge cases</li><li>Fastest to implement</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Abrupt, no visual transition</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B ★ recommended</div>
+    <div class="content">
+      <h3>CSS max-height animation</h3>
+      <p>Toggle button in header. Click → content area animates to <code>max-height:0; overflow:hidden</code> in ~200ms, then pill fades in. Clean, works well with the existing flexbox layout. A known quirk: the ease-out on expand can feel slightly slow if the content is tall (200px chart, chat messages).</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Smooth visual transition</li><li>CSS-only animation (no JS height math)</li><li>Fits existing layout perfectly</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Transition duration feels slightly uneven at different heights</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>JS measured height animation</h3>
+      <p>JS measures the actual rendered height of the content, sets it explicitly, then transitions to <code>height:0</code>. Most precise animation — easing looks identical on collapse and expand. Requires a small JS helper to compute heights before each transition.</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Perfectly smooth and symmetric animation</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More JS code</li><li>Must recalculate if content changes size (chart resize, new messages)</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;">My recommendation: <strong>B</strong> — smooth enough, minimal code, fits the existing layout. Click your choice or tell me in the terminal.</p>

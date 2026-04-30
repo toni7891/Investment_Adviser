@@ -1,0 +1,62 @@
+<h2>What should the collapsed state look like?</h2>
+<p class="subtitle">When you click minimize on the Heartrate or AI Chat panel, what should remain visible?</p>
+
+<div class="cards" style="gap:20px; margin-top:24px;">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="flex:1; min-width:260px;">
+    <div class="card-image" style="padding:16px; background:#0d1117; border-radius:6px; font-family:monospace;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#161b22; border:1px solid #30363d; border-radius:4px; color:#e6b800;">
+        <span style="font-size:11px; letter-spacing:1px;">// PORTFOLIO HEARTRATE</span>
+        <span style="font-size:14px; color:#58a6ff; cursor:pointer;">▶</span>
+      </div>
+      <div style="height:8px; background:#0d1117;"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#161b22; border:1px solid #30363d; border-radius:4px; color:#e6b800;">
+        <span style="font-size:11px; letter-spacing:1px;">// AI STRATEGIST</span>
+        <span style="font-size:14px; color:#58a6ff; cursor:pointer;">▶</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Header only</h3>
+      <p>Collapses to just the title bar with a small expand arrow/chevron. Both sections can be minimized independently.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="flex:1; min-width:260px;">
+    <div class="card-image" style="padding:16px; background:#0d1117; border-radius:6px; font-family:monospace;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#161b22; border:1px solid #30363d; border-radius:4px; color:#e6b800;">
+        <span style="font-size:11px; letter-spacing:1px;">// PORTFOLIO HEARTRATE</span>
+        <span style="font-size:11px; color:#8b949e;">[CHART HIDDEN]</span>
+        <span style="font-size:14px; color:#58a6ff; cursor:pointer;">▼ SHOW</span>
+      </div>
+      <div style="height:8px; background:#0d1117;"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#161b22; border:1px solid #30363d; border-radius:4px; color:#e6b800;">
+        <span style="font-size:11px; letter-spacing:1px;">// AI STRATEGIST</span>
+        <span style="font-size:11px; color:#3fb950;">[3 msgs]</span>
+        <span style="font-size:14px; color:#58a6ff; cursor:pointer;">▼ SHOW</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Header with status hint</h3>
+      <p>Same as A but also shows a brief status (e.g. message count for chat, "CHART HIDDEN" for heartrate) so you know what's there.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)" style="flex:1; min-width:260px;">
+    <div class="card-image" style="padding:16px; background:#0d1117; border-radius:6px; font-family:monospace;">
+      <div style="display:flex; align-items:center; gap:8px; color:#8b949e; font-size:10px; letter-spacing:1px;">
+        <span style="border:1px solid #30363d; padding:2px 8px; border-radius:2px; cursor:pointer; color:#58a6ff;">▶ HEARTRATE</span>
+        <span style="border:1px solid #30363d; padding:2px 8px; border-radius:2px; cursor:pointer; color:#58a6ff;">▶ AI CHAT</span>
+      </div>
+      <div style="margin-top:8px; padding:8px 12px; background:#161b22; border:1px solid #30363d; border-radius:4px; color:#8b949e; font-size:10px;">
+        (rest of page content expands to fill the space)
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Compact pill buttons</h3>
+      <p>When collapsed, sections shrink to tiny pill/tab buttons in a toolbar row. The main content area expands to fill the freed space.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;">Click an option or just tell me in the terminal which you prefer.</p>
