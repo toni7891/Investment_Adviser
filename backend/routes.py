@@ -17,9 +17,13 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 try:
-    from .database import db
+    from .database import db, client as _mongo_client
 except ImportError:
     from database import db
+    try:
+        from database import client as _mongo_client
+    except ImportError:
+        _mongo_client = None
 
 try:
     from .search import web_search_cached
@@ -34,6 +38,65 @@ except ImportError:
             return ""
 
 router = APIRouter()
+
+# ─── Transaction helper ────────────────────────────────────────────────────────
+
+def _with_optional_transaction(ops_fn):
+    """Run ops_fn(session) inside a MongoDB transaction when available.
+
+    Falls back to ops_fn(None) (no transaction) for standalone instances or
+    mongomock (used in tests) that don't support multi-document transactions.
+    ops_fn receives the session (or None) and must pass it to every pymongo call.
+    Mongomock raises NotImplementedError on the first write; since no writes have
+    occurred yet, it's safe to retry without a session.
+    """
+    if _mongo_client is None:
+        ops_fn(None)
+        return
+
+    session = None
+    try:
+        session = _mongo_client.start_session()
+        session.start_transaction()
+    except Exception as e:
+        logger.debug("Transactions not available, proceeding without: %s", e)
+        if session:
+            try:
+                session.end_session()
+            except Exception:
+                pass
+        ops_fn(None)
+        return
+
+    session_ended = False
+    try:
+        ops_fn(session)
+        session.commit_transaction()
+    except NotImplementedError:
+        # mongomock doesn't support session args — raised before any write lands
+        try:
+            session.abort_transaction()
+        except Exception:
+            pass
+        try:
+            session.end_session()
+        except Exception:
+            pass
+        session_ended = True
+        logger.debug("Session not supported by this MongoDB instance; retrying without transaction")
+        ops_fn(None)
+    except Exception:
+        try:
+            session.abort_transaction()
+        except Exception:
+            pass
+        raise
+    finally:
+        if not session_ended:
+            try:
+                session.end_session()
+            except Exception:
+                pass
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,25 +152,41 @@ def should_trigger_search(message: str, threshold: int = 1) -> bool:
 
 # ─── Portfolio summary for AI context ─────────────────────────────────────────
 
-def _format_portfolio_summary(portfolio_id: str, positions: list) -> str:
-    cash_val = 0.0
-    holdings = []
-    for pos in positions:
-        ticker  = pos.get("ticker", "")
-        shares  = float(pos.get("shares", 0))
-        avg_cost = float(pos.get("average_cost", pos.get("avg_cost", 0)))
-        if ticker == "CASH":
-            cash_val = shares
-        else:
-            holdings.append(f"{ticker}: {shares:.0f} shares @ ${avg_cost:.2f}")
+def _format_portfolio_summary(portfolio_id: str, portfolio_data: dict) -> str:
+    """Format a rich portfolio summary with live prices and P&L for AI context."""
+    positions     = portfolio_data.get("positions", [])
+    cash_val      = portfolio_data.get("cash_value", 0.0)
+    total_balance = portfolio_data.get("total_balance", 0.0)
+    total_profit  = portfolio_data.get("total_profit", 0.0)
+    daily_pct     = portfolio_data.get("daily_change_pct", 0.0)
+
+    profit_sign = "+" if total_profit >= 0 else ""
+    daily_sign  = "+" if daily_pct   >= 0 else ""
 
     summary  = f"Portfolio '{portfolio_id}':\n"
-    summary += f"- Cash: ${cash_val:,.2f}\n"
-    summary += f"- Holdings ({len(holdings)} positions):\n"
-    if holdings:
-        for h in holdings:
-            summary += f"  - {h}\n"
-    else:
+    summary += f"- Total Value:   ${total_balance:,.2f}\n"
+    summary += f"- Total P&L:     {profit_sign}${total_profit:,.2f}\n"
+    summary += f"- Daily Change:  {daily_sign}{daily_pct:.2f}%\n"
+    summary += f"- Cash:          ${cash_val:,.2f}\n"
+    summary += f"- Holdings ({len(positions)} positions):\n"
+
+    for pos in positions:
+        ticker        = pos.get("ticker", "")
+        shares        = float(pos.get("shares", 0))
+        avg_cost      = float(pos.get("average_cost", pos.get("avg_cost", 0)))
+        current_price = float(pos.get("current_price", avg_cost))
+        market_value  = float(pos.get("market_value", shares * current_price))
+        pl            = float(pos.get("pl", 0.0))
+        daily_chg     = float(pos.get("daily_change", 0.0))
+        pl_sign   = "+" if pl       >= 0 else ""
+        d_sign    = "+" if daily_chg >= 0 else ""
+        summary += (
+            f"  - {ticker}: {shares:.4g} sh @ avg ${avg_cost:.2f}"
+            f", now ${current_price:.2f}, MV ${market_value:,.2f}"
+            f", P&L {pl_sign}${pl:,.2f}, daily {d_sign}{daily_chg:.2f}%\n"
+        )
+
+    if not positions:
         summary += "  (no stock holdings)\n"
     return summary
 
@@ -444,7 +523,11 @@ async def upload_portfolio(file: UploadFile = File(...)):
             tickers_to_validate = [doc["ticker"] for doc in stock_documents]
             logger.info("Validating tickers for upload: %s", tickers_to_validate)
             try:
-                validation_data = yf.download(tickers_to_validate, period="5d", progress=False)
+                def _validate_upload():
+                    return yf.download(tickers_to_validate, period="5d", progress=False)
+
+                loop = asyncio.get_running_loop()
+                validation_data = await loop.run_in_executor(None, _validate_upload)
                 valid_tickers   = set()
                 if isinstance(validation_data.columns, pd.MultiIndex):
                     for ticker in tickers_to_validate:
@@ -519,8 +602,12 @@ async def get_portfolio(portfolio_id: str):
 
         market_data = {}
         if tickers:
+            def _download_prices():
+                return yf.download(tickers, period="2d", group_by="ticker", progress=False)
+
             try:
-                data = yf.download(tickers, period="2d", group_by="ticker", progress=False)
+                loop = asyncio.get_running_loop()
+                data = await loop.run_in_executor(None, _download_prices)
                 for t in tickers:
                     try:
                         ticker_df = data if len(tickers) == 1 else data[t]
@@ -598,6 +685,7 @@ async def delete_portfolio(portfolio_id: str):
     if collection_name not in db.list_collection_names():
         raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
     db[collection_name].drop()
+    db[collection_name + "_history"].drop()
     return {"message": f"Portfolio '{portfolio_id}' deleted successfully"}
 
 # ─── Position management ───────────────────────────────────────────────────────
@@ -651,29 +739,33 @@ async def add_position(portfolio_id: str, request: dict):
             if not is_valid:
                 raise HTTPException(status_code=400, detail=error_msg)
 
-        # Merge into existing position (weighted average) or insert new
-        if existing:
-            old_shares   = float(existing.get("shares", 0))
-            old_avg_cost = float(existing.get("average_cost", existing.get("avg_cost", 0)))
-            new_total    = old_shares + float(shares)
-            new_avg      = (old_shares * old_avg_cost + float(shares) * float(avg_cost)) / new_total
-            collection.update_one(
-                {"ticker": ticker},
-                {"$set": {"shares": new_total, "average_cost": new_avg}},
-            )
-        else:
-            collection.insert_one({
-                "ticker":       ticker,
-                "shares":       float(shares),
-                "average_cost": float(avg_cost),
-            })
+        # Merge position + deduct cash atomically
+        old_shares   = float(existing.get("shares", 0))   if existing else 0.0
+        old_avg_cost = float(existing.get("average_cost", existing.get("avg_cost", 0))) if existing else 0.0
 
-        # Deduct cost from cash
-        collection.update_one(
-            {"ticker": "CASH"},
-            {"$inc": {"shares": -total_cost}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
-            upsert=True,
-        )
+        def _do_buy(session):
+            kw = {"session": session} if session is not None else {}
+            if existing:
+                new_total = old_shares + float(shares)
+                new_avg   = (old_shares * old_avg_cost + float(shares) * float(avg_cost)) / new_total
+                collection.update_one(
+                    {"ticker": ticker},
+                    {"$set": {"shares": new_total, "average_cost": new_avg}},
+                    **kw,
+                )
+            else:
+                collection.insert_one(
+                    {"ticker": ticker, "shares": float(shares), "average_cost": float(avg_cost)},
+                    **kw,
+                )
+            collection.update_one(
+                {"ticker": "CASH"},
+                {"$inc": {"shares": -total_cost}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
+                upsert=True,
+                **kw,
+            )
+
+        _with_optional_transaction(_do_buy)
     else:
         # Edit mode: correct position data without touching cash
         if not existing:
@@ -727,20 +819,24 @@ async def sell_position(portfolio_id: str, ticker: str, request: dict):
 
     proceeds = shares_val * price_val
 
-    if abs(shares_val - current_shares) < 0.0001:
-        collection.delete_one({"ticker": ticker_upper})
-    else:
+    def _do_sell(session):
+        kw = {"session": session} if session is not None else {}
+        if abs(shares_val - current_shares) < 0.0001:
+            collection.delete_one({"ticker": ticker_upper}, **kw)
+        else:
+            collection.update_one(
+                {"ticker": ticker_upper},
+                {"$set": {"shares": round(current_shares - shares_val, 10)}},
+                **kw,
+            )
         collection.update_one(
-            {"ticker": ticker_upper},
-            {"$set": {"shares": round(current_shares - shares_val, 10)}}
+            {"ticker": "CASH"},
+            {"$inc": {"shares": proceeds}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
+            upsert=True,
+            **kw,
         )
 
-    # Credit proceeds to cash
-    collection.update_one(
-        {"ticker": "CASH"},
-        {"$inc": {"shares": proceeds}, "$set": {"ticker": "CASH", "average_cost": 1.0}},
-        upsert=True,
-    )
+    _with_optional_transaction(_do_sell)
 
     return {
         "message":          f"Sold {shares_val} shares of {ticker_upper} @ ${price_val:.2f}",
@@ -1031,6 +1127,54 @@ async def get_fear_greed():
             return _FNG_CACHE["data"]
         raise HTTPException(status_code=502, detail=f"Fear & Greed index unavailable: {exc}")
 
+# ─── Benchmark data ────────────────────────────────────────────────────────────
+
+_BENCHMARK_PERIOD_MAP = {
+    "1w": "5d", "1m": "1mo", "3m": "3mo",
+    "6m": "6mo", "1y": "1y", "all": "5y",
+}
+_BENCHMARK_CACHE: dict = {}
+_BENCHMARK_TTL  = 300  # 5 minutes
+
+@router.get("/market/benchmark")
+async def get_benchmark(symbol: str = "SPY", period: str = "1w"):
+    """Return daily closing prices for a benchmark symbol over the requested period."""
+    symbol = symbol.upper().strip()
+    if not re.match(r'^[A-Z0-9\-\^=\.]{1,12}$', symbol):
+        raise HTTPException(status_code=400, detail=f"Invalid symbol: {symbol}")
+
+    cache_key = f"{symbol}:{period}"
+    now = time.time()
+    if cache_key in _BENCHMARK_CACHE:
+        ts, cached = _BENCHMARK_CACHE[cache_key]
+        if now - ts < _BENCHMARK_TTL:
+            return cached
+
+    yf_period = _BENCHMARK_PERIOD_MAP.get(period, "5d")
+
+    def _fetch():
+        hist = yf.Ticker(symbol).history(period=yf_period)
+        if hist.empty:
+            return []
+        return [
+            {"date": ts.strftime("%Y-%m-%d"), "close": float(round(row["Close"], 4))}
+            for ts, row in hist.iterrows()
+            if not pd.isna(row["Close"])
+        ]
+
+    try:
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, _fetch)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"No price data for {symbol}")
+        result = {"symbol": symbol, "period": period, "data": data}
+        _BENCHMARK_CACHE[cache_key] = (now, result)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Benchmark fetch failed: {exc}")
+
 # ─── AI chat ──────────────────────────────────────────────────────────────────
 
 @router.post("/chat")
@@ -1047,17 +1191,17 @@ async def ai_chat(request: dict):
         logger.info("Chat request: portfolio='%s', web_search=%s, msg_len=%d",
                     portfolio_id, use_web_search, len(user_message))
 
-        # Fetch portfolio context
+        # Fetch portfolio context with live prices
         portfolio_context = ""
         if portfolio_id:
             if db is None:
                 portfolio_context = "(Note: Portfolio data unavailable — database disconnected)"
             else:
                 try:
-                    positions_col  = db[_safe_collection_name(portfolio_id)]
-                    user_positions = list(positions_col.find({}, {"_id": 0}))
-                    if user_positions:
-                        portfolio_context = _format_portfolio_summary(portfolio_id, user_positions)
+                    portfolio_data    = await get_portfolio(portfolio_id)
+                    portfolio_context = _format_portfolio_summary(portfolio_id, portfolio_data)
+                except HTTPException:
+                    portfolio_context = f"(Note: Portfolio '{portfolio_id}' not found)"
                 except Exception as e:
                     logger.warning("Could not fetch portfolio '%s': %s", portfolio_id, e)
                     portfolio_context = f"(Note: Portfolio '{portfolio_id}' data could not be loaded)"

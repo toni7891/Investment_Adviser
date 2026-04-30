@@ -97,6 +97,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Ticker tape animation frame id
   let tickerAnimId = null;
 
+  // Benchmark overlay state
+  let benchmarkEnabled = false;
+
   // Diagnostic object — inspect via window.__tickerDiag in browser console
   window.__tickerDiag = {
     running:    false,
@@ -238,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateStatusIndicators() {
     const mongoStatus    = document.getElementById("mongoStatus");
     const mongoStatusDot = document.getElementById("mongoStatusDot");
-    fetch("/api/portfolios/list")
+    fetch("/status")
       .then((resp) => {
         if (!resp.ok) throw new Error();
         if (mongoStatus)    { mongoStatus.textContent = "Connected"; mongoStatus.style.color = "#10b981"; }
@@ -869,7 +872,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const resp = await fetch(`/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshots?period=${period}`);
+      // Fetch snapshots and (optionally) benchmark data in parallel
+      const fetchBenchmark = benchmarkEnabled
+        ? fetch(`/api/market/benchmark?symbol=SPY&period=${period}`).then((r) => r.ok ? r.json() : null).catch(() => null)
+        : Promise.resolve(null);
+
+      const [resp, benchData] = await Promise.all([
+        fetch(`/api/portfolios/${encodeURIComponent(currentPortfolioId)}/snapshots?period=${period}`),
+        fetchBenchmark,
+      ]);
+
       if (!resp.ok) return;
       const data      = await resp.json();
       const snapshots = data.snapshots || [];
@@ -899,36 +911,79 @@ document.addEventListener("DOMContentLoaded", () => {
         const suffix = dateCounts[s.date] > 1 && s.slot ? ` ${SLOT_LABEL[s.slot] || s.slot}` : "";
         return s.date + suffix;
       });
-      const values = snapshots.map((s) => s.total_value);
-      const isUp      = (values[values.length - 1] || 0) >= (values[0] || 0);
+      const values    = snapshots.map((s) => s.total_value);
+      const portStart = values[0] || 0;
+      const isUp      = (values[values.length - 1] || 0) >= portStart;
       const lineColor = isUp ? "#00d97e" : "#ff4560";
       const fillColor = isUp ? "rgba(0,217,126,0.07)" : "rgba(255,69,96,0.07)";
+
+      const datasets = [{
+        label:                    "Portfolio",
+        data:                     values,
+        borderColor:              lineColor,
+        backgroundColor:          fillColor,
+        borderWidth:              1.5,
+        fill:                     true,
+        tension:                  0.3,
+        pointRadius:              0,
+        pointHoverRadius:         4,
+        pointHoverBackgroundColor: lineColor,
+      }];
+
+      // Build benchmark dataset if data is available
+      if (benchData && benchData.data && benchData.data.length > 0 && portStart > 0) {
+        const spyByDate = {};
+        benchData.data.forEach((d) => { spyByDate[d.date] = d.close; });
+
+        // Find the earliest SPY price aligned to the portfolio period
+        const sortedDates = Object.keys(spyByDate).sort();
+        const spyStart = sortedDates.length > 0 ? spyByDate[sortedDates[0]] : null;
+
+        if (spyStart) {
+          const benchValues = snapshots.map((s) => {
+            // Nearest preceding SPY date
+            const candidates = sortedDates.filter((d) => d <= s.date);
+            const nearest    = candidates.length > 0 ? candidates[candidates.length - 1] : sortedDates[0];
+            const spyPrice   = spyByDate[nearest];
+            return spyPrice ? parseFloat((portStart * (spyPrice / spyStart)).toFixed(2)) : null;
+          });
+
+          datasets.push({
+            label:           "SPY",
+            data:            benchValues,
+            borderColor:     "#f0b429",
+            backgroundColor: "transparent",
+            borderWidth:     1.5,
+            borderDash:      [5, 4],
+            fill:            false,
+            tension:         0.3,
+            pointRadius:     0,
+            pointHoverRadius: 3,
+            pointHoverBackgroundColor: "#f0b429",
+          });
+        }
+      }
 
       if (portfolioChart) portfolioChart.destroy();
 
       const ctx = portfolioChartEl.getContext("2d");
       portfolioChart = new Chart(ctx, {
         type: "line",
-        data: {
-          labels,
-          datasets: [{
-            data:                     values,
-            borderColor:              lineColor,
-            backgroundColor:          fillColor,
-            borderWidth:              1.5,
-            fill:                     true,
-            tension:                  0.3,
-            pointRadius:              0,
-            pointHoverRadius:         4,
-            pointHoverBackgroundColor: lineColor,
-          }],
-        },
+        data: { labels, datasets },
         options: {
           responsive:          true,
           maintainAspectRatio: false,
           interaction:         { intersect: false, mode: "index" },
           plugins: {
-            legend:  { display: false },
+            legend: {
+              display: datasets.length > 1,
+              labels: {
+                color:     "#6b879e",
+                font:      { family: "'IBM Plex Mono', monospace", size: 10 },
+                boxWidth:  20,
+                usePointStyle: true,
+              },
+            },
             tooltip: {
               backgroundColor: "#1b2a38",
               borderColor:     "rgba(255,255,255,0.07)",
@@ -938,7 +993,7 @@ document.addEventListener("DOMContentLoaded", () => {
               titleFont: { family: "'IBM Plex Mono', monospace", size: 10 },
               bodyFont:  { family: "'IBM Plex Mono', monospace", size: 12 },
               callbacks: {
-                label: (ctx) => ` ${formatCurrency(ctx.raw)}`,
+                label: (ctx) => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
               },
             },
           },
@@ -1139,6 +1194,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // Period selector
   document.querySelectorAll(".period-btn").forEach((btn) => {
     btn.addEventListener("click", () => loadHeartrate(btn.dataset.period));
+  });
+
+  // Benchmark toggle
+  const benchmarkToggleBtn = document.getElementById("benchmarkToggleBtn");
+  benchmarkToggleBtn?.addEventListener("click", () => {
+    benchmarkEnabled = !benchmarkEnabled;
+    benchmarkToggleBtn.classList.toggle("act-btn--active", benchmarkEnabled);
+    benchmarkToggleBtn.textContent = benchmarkEnabled ? "VS SPY ✓" : "VS SPY";
+    if (currentPortfolioId) loadHeartrate(currentPeriod);
   });
 
   // Export history
