@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=5.0">
+  <link rel="stylesheet" href="/static/style.css?v=6.0">
   <link rel="icon" href="data:,">
 </head>
 <body>
@@ -30,6 +30,7 @@
           <span class="port-label">PORTFOLIO</span>
           <h2 id="portfolioTitle" class="port-name">──────</h2>
         </div>
+        <button id="renameBtn" class="rename-btn" title="Rename portfolio">✎</button>
       </div>
 
       <div class="hdr-minis">
@@ -93,11 +94,15 @@
       <!-- Holdings Pane -->
       <section class="holdings-pane">
         <div class="pane-hdr">
-          <span class="pane-title">// POSITIONS</span>
+          <div class="pane-title-row">
+            <span class="pane-title">// POSITIONS</span>
+            <span class="refresh-stamp" id="refreshStamp" title="Prices auto-refresh every 90s"></span>
+          </div>
           <div class="pane-actions">
-            <button id="addPositionBtn"  class="act-btn act-btn--blue">+ BUY</button>
-            <button id="depositCashBtn"  class="act-btn act-btn--gain">↓ DEPOSIT</button>
-            <button id="withdrawCashBtn" class="act-btn act-btn--amber">↑ WITHDRAW</button>
+            <button id="addPositionBtn"      class="act-btn act-btn--blue">+ BUY</button>
+            <button id="depositCashBtn"      class="act-btn act-btn--gain">↓ DEPOSIT</button>
+            <button id="withdrawCashBtn"     class="act-btn act-btn--amber">↑ WITHDRAW</button>
+            <button id="exportPositionsBtn"  class="act-btn act-btn--blue">↓ EXPORT</button>
           </div>
         </div>
         <div class="holdings-table-container">
@@ -180,6 +185,52 @@
       <div class="heartrate-chart-wrap">
         <canvas id="portfolioChart"></canvas>
         <div id="chartEmpty" class="chart-empty">No historical data yet — a snapshot is recorded daily when you open the portfolio.</div>
+      </div>
+    </section>
+
+    <!-- Sector Allocation (#8) -->
+    <section class="sector-section" id="sectorSection">
+      <div class="pane-hdr">
+        <span class="pane-title">// SECTOR ALLOCATION</span>
+        <div class="pane-actions">
+          <button type="button" class="panel-toggle-btn" id="sectorToggle">⊟ HIDE</button>
+        </div>
+      </div>
+      <div class="sector-body">
+        <div class="sector-chart-wrap" id="sectorChartWrap">
+          <canvas id="sectorChart"></canvas>
+        </div>
+        <div class="sector-list" id="sectorList"></div>
+      </div>
+    </section>
+
+    <!-- Trade History (#10) -->
+    <section class="trades-section" id="tradesSection">
+      <div class="pane-hdr">
+        <div class="trades-hdr-left">
+          <span class="pane-title">// TRADE HISTORY</span>
+          <span class="trades-total-lbl">REALIZED P&amp;L</span>
+          <span id="tradesTotalPnl" class="trades-total-val">──</span>
+        </div>
+        <div class="pane-actions">
+          <button type="button" class="panel-toggle-btn" id="tradesToggle">⊟ HIDE</button>
+        </div>
+      </div>
+      <div class="trades-table-wrap">
+        <table class="holdings-table trades-table">
+          <thead>
+            <tr>
+              <th class="col-ticker">TICKER</th>
+              <th class="col-num">DATE</th>
+              <th class="col-num">SHARES</th>
+              <th class="col-num">SELL PRICE</th>
+              <th class="col-num">AVG COST</th>
+              <th class="col-num">PROCEEDS</th>
+              <th class="col-num">REALIZED P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
       </div>
     </section>
 
@@ -312,11 +363,28 @@
     </div>
   </div>
 
+  <!-- Rename Modal (#9) -->
+  <div id="renameModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-hdr">RENAME PORTFOLIO</h3>
+      <form id="renameForm">
+        <div class="field-grp">
+          <label class="field-lbl" for="renameInput">NEW NAME</label>
+          <input class="field-inp" type="text" id="renameInput" placeholder="e.g. My Portfolio" required maxlength="60">
+        </div>
+        <div class="modal-foot">
+          <button type="button" id="renameCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
+          <button type="submit" id="renameSubmitBtn" class="mbtn mbtn--confirm">RENAME</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-  <!-- App Logic -->
-  <script src="/static/app.js?v=5.0"></script>
+  <!-- App Logic (ES module) -->
+  <script type="module" src="/static/app.js?v=6.0"></script>
 
   <script>
     (function() {

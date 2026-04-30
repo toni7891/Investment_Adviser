@@ -1647,17 +1647,24 @@ a { color: var(--amber); }
 /* Heartrate: collapse chart vertically */
 .heartrate-section.collapsed .heartrate-chart-wrap {
   max-height: 0;
+  height: 0;
+  padding: 0;
 }
 
 .heartrate-section.collapsed .pane-hdr {
-  border-radius: 99px;
-  margin: 6px 12px;
-  border: 1px solid var(--rim);
-  cursor: pointer;
+  border-bottom: none;
 }
 
 .heartrate-section.collapsed {
-  background: transparent;
+  border-bottom: 1px solid var(--rim);
+}
+
+.heartrate-section.collapsed .heartrate-controls .period-tabs,
+.heartrate-section.collapsed .heartrate-controls #benchmarkToggleBtn,
+.heartrate-section.collapsed .heartrate-controls #takeSnapshotBtn,
+.heartrate-section.collapsed .heartrate-controls #importHistoryBtn,
+.heartrate-section.collapsed .heartrate-controls #exportHistoryBtn {
+  display: none;
 }
 
 /* AI pane: collapse to a narrow vertical side strip */
@@ -1781,4 +1788,160 @@ a { color: var(--amber); }
   .status-bar { display: none; }
 
   .modal-box { margin: 0 12px; width: calc(100% - 24px); padding: 20px 18px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v6.0 ADDITIONS
+═══════════════════════════════════════════════════════════════ */
+
+/* ─── Benchmark toggle active state ─────────────────────────── */
+.act-btn--amber.act-btn--active {
+  background: var(--amber);
+  color: #0a1622;
+}
+
+/* ─── Rename button in header ────────────────────────────────── */
+.rename-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  padding: 4px 6px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+  align-self: center;
+  margin-left: 4px;
+  line-height: 1;
+}
+.rename-btn:hover { opacity: 1; color: var(--amber); }
+
+/* ─── Sector allocation section ──────────────────────────────── */
+.sector-section {
+  border-top: 1px solid var(--rim);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.sector-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+
+.sector-section.collapsed .sector-body { display: none; }
+.sector-section.collapsed .pane-hdr    { border-bottom: none; }
+.sector-section.collapsed              { border-bottom: 1px solid var(--rim); }
+
+.sector-chart-wrap {
+  width: 180px;
+  height: 180px;
+  flex-shrink: 0;
+}
+
+.sector-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.sector-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sector-name {
+  flex: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sector-pct {
+  color: var(--text);
+  font-weight: 500;
+  min-width: 40px;
+  text-align: right;
+}
+
+.sector-val {
+  color: var(--text-dim);
+  min-width: 80px;
+  text-align: right;
+  font-size: 10px;
+}
+
+/* ─── Trade history section ──────────────────────────────────── */
+.trades-section {
+  border-top: 1px solid var(--rim);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.trades-section.collapsed .trades-table-wrap { display: none; }
+.trades-section.collapsed .pane-hdr          { border-bottom: none; }
+.trades-section.collapsed                    { border-bottom: 1px solid var(--rim); }
+
+.trades-hdr-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trades-total-lbl {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-xd);
+}
+
+.trades-total-val {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.trades-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.trades-table { margin: 0; }
+
+.trades-empty {
+  text-align: center;
+  padding: 24px !important;
+  color: var(--text-xd);
+  font-size: 11px;
+}
+
+
+/* ── Auto-refresh stamp ─────────────────────────────────────── */
+.pane-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.refresh-stamp {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-xd);
+  opacity: 0.55;
 }

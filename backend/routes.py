@@ -9,6 +9,7 @@ from datetime import datetime, date as _date, timedelta
 import pandas as pd
 import yfinance as yf
 import re
+from pydantic import BaseModel
 try:
     import pytz as _pytz
 except ImportError:
@@ -38,6 +39,29 @@ except ImportError:
             return ""
 
 router = APIRouter()
+
+# ─── Request models (#15) ─────────────────────────────────────────────────────
+
+class PositionRequest(BaseModel):
+    ticker: str
+    shares: float
+    average_cost: float
+    action: str = "buy"
+
+class SellRequest(BaseModel):
+    shares: float
+    sell_price: float
+
+class CashRequest(BaseModel):
+    amount: float
+
+class ChatRequest(BaseModel):
+    message: str
+    portfolio_id: str = ""
+    use_web_search: bool = True
+
+class RenameRequest(BaseModel):
+    new_name: str
 
 # ─── Transaction helper ────────────────────────────────────────────────────────
 
@@ -500,10 +524,9 @@ async def list_portfolio_names():
     
     collections = db.list_collection_names()
     
-    # Filter out system collections AND those containing "_history"
     filtered_portfolios = [
-        c for c in collections 
-        if not c.startswith("system.") and "_history" not in c
+        c for c in collections
+        if not c.startswith("system.") and not c.endswith("_history") and not c.endswith("_trades")
     ]
     
     return {"portfolios": filtered_portfolios}
@@ -686,7 +709,43 @@ async def delete_portfolio(portfolio_id: str):
         raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
     db[collection_name].drop()
     db[collection_name + "_history"].drop()
+    db[collection_name + "_trades"].drop()
     return {"message": f"Portfolio '{portfolio_id}' deleted successfully"}
+
+# ─── Portfolio rename (#9) ───────────────────────────────────────────────────
+
+@router.post("/portfolios/{portfolio_id}/rename")
+async def rename_portfolio(portfolio_id: str, request: RenameRequest):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    new_name = request.new_name.strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="new_name is required")
+
+    old_col = _safe_collection_name(portfolio_id)
+    new_col = _safe_collection_name(new_name)
+
+    if old_col == new_col:
+        raise HTTPException(status_code=400, detail="New name is the same as the current name")
+    all_cols = db.list_collection_names()
+    if old_col not in all_cols:
+        raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
+    if new_col in all_cols:
+        raise HTTPException(status_code=400, detail=f"Portfolio '{new_name}' already exists")
+
+    def _copy_and_drop(src: str, dst: str):
+        docs = list(db[src].find({}))
+        if docs:
+            for d in docs:
+                d.pop("_id", None)
+            db[dst].insert_many(docs)
+        db[src].drop()
+
+    _copy_and_drop(old_col, new_col)
+    _copy_and_drop(old_col + "_history", new_col + "_history")
+    _copy_and_drop(old_col + "_trades",  new_col + "_trades")
+
+    return {"message": f"Portfolio renamed to '{new_name}'", "new_id": new_name}
 
 # ─── Position management ───────────────────────────────────────────────────────
 
@@ -702,28 +761,28 @@ async def remove_position(portfolio_id: str, ticker: str):
     return {"message": "Position removed", "ticker": ticker_upper, "deleted_count": result.deleted_count}
 
 @router.post("/portfolios/{portfolio_id}/positions")
-async def add_position(portfolio_id: str, request: dict):
+async def add_position(portfolio_id: str, request: PositionRequest):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
-    ticker   = request.get("ticker", "").strip().upper()
-    shares   = request.get("shares")
-    avg_cost = request.get("average_cost")
-    action   = request.get("action", "buy")   # "buy" (default) or "edit"
+    ticker   = request.ticker.strip().upper()
+    shares   = request.shares
+    avg_cost = request.average_cost
+    action   = request.action
 
     if not ticker or ticker == "CASH":
         raise HTTPException(status_code=400, detail="Invalid ticker")
-    if shares is None or float(shares) <= 0:
+    if shares <= 0:
         raise HTTPException(status_code=400, detail="Shares must be a positive number")
-    if avg_cost is None or float(avg_cost) < 0:
-        raise HTTPException(status_code=400, detail="Average cost required and must be non-negative")
+    if avg_cost < 0:
+        raise HTTPException(status_code=400, detail="Average cost must be non-negative")
 
     collection = db[_safe_collection_name(portfolio_id)]
     existing   = collection.find_one({"ticker": ticker})
 
     if action == "buy":
         # Check cash sufficiency before anything else
-        total_cost = float(shares) * float(avg_cost)
+        total_cost = shares * avg_cost
         cash_doc     = collection.find_one({"ticker": "CASH"})
         current_cash = float(cash_doc.get("shares", 0)) if cash_doc else 0.0
         if current_cash < total_cost:
@@ -746,8 +805,8 @@ async def add_position(portfolio_id: str, request: dict):
         def _do_buy(session):
             kw = {"session": session} if session is not None else {}
             if existing:
-                new_total = old_shares + float(shares)
-                new_avg   = (old_shares * old_avg_cost + float(shares) * float(avg_cost)) / new_total
+                new_total = old_shares + shares
+                new_avg   = (old_shares * old_avg_cost + shares * avg_cost) / new_total
                 collection.update_one(
                     {"ticker": ticker},
                     {"$set": {"shares": new_total, "average_cost": new_avg}},
@@ -755,7 +814,7 @@ async def add_position(portfolio_id: str, request: dict):
                 )
             else:
                 collection.insert_one(
-                    {"ticker": ticker, "shares": float(shares), "average_cost": float(avg_cost)},
+                    {"ticker": ticker, "shares": shares, "average_cost": avg_cost},
                     **kw,
                 )
             collection.update_one(
@@ -779,27 +838,18 @@ async def add_position(portfolio_id: str, request: dict):
             upsert=True,
         )
 
-    return {"ticker": ticker, "shares": float(shares), "average_cost": float(avg_cost), "message": "Position saved"}
+    return {"ticker": ticker, "shares": shares, "average_cost": avg_cost, "message": "Position saved"}
 
 
 @router.post("/portfolios/{portfolio_id}/positions/{ticker}/sell")
-async def sell_position(portfolio_id: str, ticker: str, request: dict):
+async def sell_position(portfolio_id: str, ticker: str, request: SellRequest):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
-    ticker_upper   = ticker.strip().upper()
-    shares_to_sell = request.get("shares")
-    sell_price     = request.get("sell_price")
+    ticker_upper = ticker.strip().upper()
+    shares_val   = request.shares
+    price_val    = request.sell_price
 
-    if shares_to_sell is None:
-        raise HTTPException(status_code=400, detail="shares is required")
-    if sell_price is None:
-        raise HTTPException(status_code=400, detail="sell_price is required")
-    try:
-        shares_val = float(shares_to_sell)
-        price_val  = float(sell_price)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid shares or price value")
     if shares_val <= 0:
         raise HTTPException(status_code=400, detail="Shares must be positive")
     if price_val < 0:
@@ -838,6 +888,24 @@ async def sell_position(portfolio_id: str, ticker: str, request: dict):
 
     _with_optional_transaction(_do_sell)
 
+    # Write realized trade record (#10)
+    avg_cost_sold = float(existing.get("average_cost", existing.get("avg_cost", 0)))
+    realized_pnl  = round((price_val - avg_cost_sold) * shares_val, 2)
+    trade_doc = {
+        "date":         _date.today().isoformat(),
+        "ticker":       ticker_upper,
+        "shares":       shares_val,
+        "sell_price":   price_val,
+        "avg_cost":     avg_cost_sold,
+        "proceeds":     round(proceeds, 2),
+        "realized_pnl": realized_pnl,
+        "timestamp":    datetime.utcnow().isoformat() + "Z",
+    }
+    try:
+        db[_safe_collection_name(portfolio_id) + "_trades"].insert_one(trade_doc)
+    except Exception as exc:
+        logger.warning("Failed to write trade record: %s", exc)
+
     return {
         "message":          f"Sold {shares_val} shares of {ticker_upper} @ ${price_val:.2f}",
         "proceeds":         round(proceeds, 2),
@@ -848,16 +916,10 @@ async def sell_position(portfolio_id: str, ticker: str, request: dict):
 # ─── Cash management ──────────────────────────────────────────────────────────
 
 @router.post("/portfolios/{portfolio_id}/cash/deposit")
-async def deposit_cash(portfolio_id: str, request: dict):
+async def deposit_cash(portfolio_id: str, request: CashRequest):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
-    amount = request.get("amount")
-    if amount is None:
-        raise HTTPException(status_code=400, detail="Amount is required")
-    try:
-        amount_val = float(amount)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Amount must be a number")
+    amount_val = request.amount
     if amount_val <= 0:
         raise HTTPException(status_code=400, detail="Amount must be a positive number")
 
@@ -872,16 +934,10 @@ async def deposit_cash(portfolio_id: str, request: dict):
     return {"message": "Cash deposited", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
 
 @router.post("/portfolios/{portfolio_id}/cash/withdraw")
-async def withdraw_cash(portfolio_id: str, request: dict):
+async def withdraw_cash(portfolio_id: str, request: CashRequest):
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
-    amount = request.get("amount")
-    if amount is None:
-        raise HTTPException(status_code=400, detail="Amount is required")
-    try:
-        amount_val = float(amount)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Amount must be a number")
+    amount_val = request.amount
     if amount_val <= 0:
         raise HTTPException(status_code=400, detail="Amount must be a positive number")
 
@@ -1048,6 +1104,122 @@ async def import_snapshots(portfolio_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Import failed: {exc}")
 
 
+# ─── Positions export (#14) ───────────────────────────────────────────────────
+
+@router.get("/portfolios/{portfolio_id}/positions/export")
+async def export_positions(portfolio_id: str):
+    from fastapi.responses import StreamingResponse
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    portfolio_data = await get_portfolio(portfolio_id)
+    positions      = portfolio_data.get("positions", [])
+    cash_val       = portfolio_data.get("cash_value", 0.0)
+
+    rows = [
+        {
+            "Ticker":           p["ticker"],
+            "Shares":           p["shares"],
+            "Avg Cost ($)":     round(p.get("average_cost", 0), 2),
+            "Current Price ($)": round(p.get("current_price", p.get("average_cost", 0)), 2),
+            "Market Value ($)": round(p.get("market_value", 0), 2),
+            "P&L ($)":          round(p.get("pl", 0), 2),
+            "Daily Change (%)": round(p.get("daily_change", 0), 2),
+        }
+        for p in positions
+    ]
+    rows.append({
+        "Ticker": "CASH", "Shares": round(cash_val, 2),
+        "Avg Cost ($)": 1.0, "Current Price ($)": 1.0,
+        "Market Value ($)": round(cash_val, 2), "P&L ($)": 0.0, "Daily Change (%)": 0.0,
+    })
+
+    df     = pd.DataFrame(rows)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Positions", index=False)
+    output.seek(0)
+
+    safe_name = _safe_collection_name(portfolio_id)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_positions.xlsx"'},
+    )
+
+
+# ─── Trade history (#10) ──────────────────────────────────────────────────────
+
+@router.get("/portfolios/{portfolio_id}/trades")
+async def get_trades(portfolio_id: str):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+    trades_col = db[_safe_collection_name(portfolio_id) + "_trades"]
+    trades     = list(trades_col.find({}, {"_id": 0}).sort("timestamp", -1).limit(200))
+    total_realized = sum(t.get("realized_pnl", 0) for t in trades)
+    return {"trades": trades, "total_realized_pnl": round(total_realized, 2)}
+
+
+# ─── Sector allocation (#8) ───────────────────────────────────────────────────
+
+_SECTOR_CACHE: dict = {}
+_SECTOR_TTL   = 3600  # 1 hour
+
+@router.get("/portfolios/{portfolio_id}/sectors")
+async def get_sector_allocation(portfolio_id: str):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    portfolio_data = await get_portfolio(portfolio_id)
+    positions      = portfolio_data.get("positions", [])
+    cash_val       = portfolio_data.get("cash_value", 0.0)
+    total_value    = portfolio_data.get("total_balance", 0.0)
+
+    if not positions:
+        return {
+            "sectors": [{"sector": "Cash", "value": round(cash_val, 2), "pct": 100.0}],
+            "total_value": round(total_value, 2),
+        }
+
+    now       = time.time()
+    tickers   = [p["ticker"] for p in positions]
+    to_fetch  = [t for t in tickers if t not in _SECTOR_CACHE or now - _SECTOR_CACHE[t][0] >= _SECTOR_TTL]
+    cached    = {t: _SECTOR_CACHE[t][1] for t in tickers if t in _SECTOR_CACHE and now - _SECTOR_CACHE[t][0] < _SECTOR_TTL}
+
+    if to_fetch:
+        def _fetch_sectors():
+            result = {}
+            for t in to_fetch:
+                try:
+                    info = yf.Ticker(t).info
+                    result[t] = info.get("sector") or "Unknown"
+                except Exception:
+                    result[t] = "Unknown"
+            return result
+
+        loop    = asyncio.get_running_loop()
+        fetched = await loop.run_in_executor(None, _fetch_sectors)
+        for t, sector in fetched.items():
+            _SECTOR_CACHE[t] = (now, sector)
+            cached[t] = sector
+
+    sector_values: dict = {}
+    for pos in positions:
+        sector = cached.get(pos["ticker"], "Unknown")
+        sector_values[sector] = sector_values.get(sector, 0.0) + float(pos.get("market_value", 0))
+    if cash_val > 0:
+        sector_values["Cash"] = sector_values.get("Cash", 0.0) + cash_val
+
+    sector_list = sorted(
+        [
+            {"sector": s, "value": round(v, 2), "pct": round(v / total_value * 100, 2) if total_value > 0 else 0.0}
+            for s, v in sector_values.items()
+        ],
+        key=lambda x: -x["value"],
+    )
+    return {"sectors": sector_list, "total_value": round(total_value, 2)}
+
+
 # ─── Market data ───────────────────────────────────────────────────────────────
 
 @router.get("/market/ticker-tape")
@@ -1178,12 +1350,12 @@ async def get_benchmark(symbol: str = "SPY", period: str = "1w"):
 # ─── AI chat ──────────────────────────────────────────────────────────────────
 
 @router.post("/chat")
-async def ai_chat(request: dict):
+async def ai_chat(request: ChatRequest):
     start_time = time.time()
     try:
-        user_message  = request.get("message", "").strip()
-        portfolio_id  = request.get("portfolio_id", "").strip()
-        use_web_search = request.get("use_web_search", True)
+        user_message   = request.message.strip()
+        portfolio_id   = request.portfolio_id.strip()
+        use_web_search = request.use_web_search
 
         if not user_message:
             raise HTTPException(status_code=400, detail="Message is required")

@@ -371,3 +371,135 @@ def test_ticker_tape_is_cached():
         f"yfinance.download called {call_count['n']} times — cache not working"
     assert r1.json()["updated_at"] == r2.json()["updated_at"], \
         "updated_at should be identical on cached response"
+
+
+# ---------------------------------------------------------------------------
+# New endpoint tests (#17)
+# ---------------------------------------------------------------------------
+
+def test_withdraw_insufficient_cash():
+    """POST /portfolios/{id}/cash/withdraw returns 400 when balance is too low."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_WITHDRAW_INSUFF"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 100.0, "average_cost": 1.0})
+
+    response = client.post(f"/api/portfolios/{port_id}/cash/withdraw", json={"amount": 500.0})
+    assert response.status_code == 400
+    assert "Insufficient" in response.json()["detail"]
+
+
+def test_buy_insufficient_cash():
+    """POST /portfolios/{id}/positions returns 400 when not enough cash to buy."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_BUY_INSUFF"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 10.0, "average_cost": 1.0})
+    # 5 shares at $170 = $850 cost, only $10 available
+    response = client.post(
+        f"/api/portfolios/{port_id}/positions",
+        json={"ticker": "AAPL", "shares": 5, "average_cost": 170.0}
+    )
+    assert response.status_code == 400
+    assert "Insufficient cash" in response.json()["detail"]
+
+
+def test_sell_position_happy_path():
+    """POST /portfolios/{id}/positions/{ticker}/sell credits cash and records trade."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_SELL_HAPPY"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 0.0, "average_cost": 1.0})
+    mock_db[port_id].insert_one({"ticker": "AAPL", "shares": 10.0, "average_cost": 150.0})
+
+    response = client.post(
+        f"/api/portfolios/{port_id}/positions/AAPL/sell",
+        json={"shares": 5, "sell_price": 180.0}
+    )
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    data = response.json()
+    assert data["proceeds"] == 900.0        # 5 × $180
+    assert data["remaining_shares"] == 5.0
+
+    # Cash credited
+    cash_doc = mock_db[port_id].find_one({"ticker": "CASH"})
+    assert cash_doc["shares"] == 900.0
+
+    # Trade record written with correct realized P&L
+    trade = mock_db[port_id + "_trades"].find_one({"ticker": "AAPL"})
+    assert trade is not None
+    assert trade["realized_pnl"] == round((180.0 - 150.0) * 5, 2)  # $150.00
+
+
+def test_sell_position_insufficient_shares():
+    """POST /portfolios/{id}/positions/{ticker}/sell returns 400 for oversell."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_SELL_INSUFF"
+    mock_db[port_id].insert_one({"ticker": "AAPL", "shares": 3.0, "average_cost": 150.0})
+
+    response = client.post(
+        f"/api/portfolios/{port_id}/positions/AAPL/sell",
+        json={"shares": 10, "sell_price": 180.0}
+    )
+    assert response.status_code == 400
+    assert "Cannot sell" in response.json()["detail"]
+
+
+def test_rename_portfolio():
+    """POST /portfolios/{id}/rename renames portfolio and preserves all positions."""
+    client, mock_db = get_test_client()
+    old_id = "SMOKE_RENAME_OLD"
+    new_id = "SMOKE_RENAME_NEW"
+    mock_db[old_id].insert_one({"ticker": "CASH", "shares": 500.0, "average_cost": 1.0})
+    mock_db[old_id].insert_one({"ticker": "AAPL", "shares": 5.0, "average_cost": 170.0})
+
+    response = client.post(f"/api/portfolios/{old_id}/rename", json={"new_name": new_id})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert response.json()["new_id"] == new_id
+
+    # Data moved to new collection; old collection empty
+    assert mock_db[new_id].count_documents({}) == 2
+    assert mock_db[old_id].count_documents({}) == 0
+
+
+def test_rename_portfolio_same_name():
+    """POST /portfolios/{id}/rename returns 400 when the name is unchanged."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_RENAME_SAME"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 100.0, "average_cost": 1.0})
+
+    response = client.post(f"/api/portfolios/{port_id}/rename", json={"new_name": port_id})
+    assert response.status_code == 400
+
+
+def test_rename_portfolio_not_found():
+    """POST /portfolios/{id}/rename returns 404 for a missing portfolio."""
+    client, mock_db = get_test_client()
+    response = client.post(
+        "/api/portfolios/DOES_NOT_EXIST_XYZ/rename",
+        json={"new_name": "SOMETHING_NEW"}
+    )
+    assert response.status_code == 404
+
+
+def test_get_trades_empty():
+    """GET /portfolios/{id}/trades returns empty list and zero P&L when no trades exist."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_TRADES_EMPTY"
+    response = client.get(f"/api/portfolios/{port_id}/trades")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["trades"] == []
+    assert data["total_realized_pnl"] == 0.0
+
+
+def test_list_portfolios_filters_history_and_trades():
+    """GET /api/portfolios/list excludes _history and _trades companion collections."""
+    client, mock_db = get_test_client()
+    mock_db["FILTER_TEST"].insert_one({"ticker": "CASH", "shares": 100.0})
+    mock_db["FILTER_TEST_history"].insert_one({"date": "2026-01-01"})
+    mock_db["FILTER_TEST_trades"].insert_one({"ticker": "AAPL"})
+
+    response = client.get("/api/portfolios/list")
+    assert response.status_code == 200
+    portfolios = response.json()["portfolios"]
+    assert "FILTER_TEST" in portfolios
+    assert "FILTER_TEST_history" not in portfolios
+    assert "FILTER_TEST_trades" not in portfolios
