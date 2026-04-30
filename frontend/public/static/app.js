@@ -7,6 +7,7 @@ import { showToast, showConfirm }                        from "./modules/ui.js";
 import { loadSummary, loadPortfolios, updateStatusIndicators, exportPositions, loadTrades } from "./modules/portfolio.js";
 import { loadHeartrate, loadSectors, updateTickerTape, loadFearGreed } from "./modules/chart.js";
 import { initChat }                                      from "./modules/chat.js";
+import { openDetailPanel, closeDetailPanel }            from "./modules/detail.js";
 import {
   openPositionModal, closePositionModal, initPositionModal,
   openSellModal,     closeSellModal,     initSellModal,
@@ -185,9 +186,19 @@ if (isDashboard) {
     setupPanelToggle("sectorToggle",      "sectorSection");
     setupPanelToggle("tradesToggle",      "tradesSection");
 
-    // Global Escape → close any open modal
+    // Stock detail panel
+    document.getElementById("detailClose")?.addEventListener("click", closeDetailPanel);
+    document.getElementById("stockDetailPanel")?.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeDetailPanel();
+    });
+
+    // Expose openDetailPanel so portfolio.js can call it via delegation
+    window._openDetailPanel = openDetailPanel;
+
+    // Global Escape → close any open modal or detail panel
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      if (document.getElementById("stockDetailPanel")?.classList.contains("open")) { closeDetailPanel(); return; }
       if (document.getElementById("positionModal")?.classList.contains("active")) closePositionModal();
       if (document.getElementById("cashModal")?.classList.contains("active"))     closeCashModal();
       if (document.getElementById("sellModal")?.classList.contains("active"))     closeSellModal();

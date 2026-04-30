@@ -58,7 +58,7 @@ export function renderHoldings(data) {
 
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td class="col-ticker">${stock.ticker ?? ""}</td>
+      <td class="col-ticker"><button class="ticker-link" data-ticker="${stock.ticker ?? ""}">${stock.ticker ?? ""}</button></td>
       <td class="col-num">${shares}</td>
       <td class="col-num">${formatCurrency(currentPrice)}</td>
       <td class="col-num">${formatCurrency(marketValue)}</td>
@@ -90,6 +90,13 @@ export function renderHoldings(data) {
       </td>
     `;
     holdingsBody.appendChild(row);
+  });
+
+  holdingsBody.querySelectorAll(".ticker-link").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ticker = btn.dataset.ticker;
+      if (ticker && ticker !== "CASH" && window._openDetailPanel) window._openDetailPanel(ticker);
+    });
   });
 
   holdingsBody.querySelectorAll(".btn-edit").forEach((btn) => {
@@ -290,6 +297,20 @@ export async function loadTrades() {
     }
 
     bodyEl.innerHTML = trades.map((t) => {
+      if (t.type === "deposit" || t.type === "withdraw") {
+        const isDeposit = t.type === "deposit";
+        return `
+          <tr>
+            <td class="col-ticker">CASH</td>
+            <td class="col-num">${t.date}</td>
+            <td class="col-num">──</td>
+            <td class="col-num">──</td>
+            <td class="col-num">──</td>
+            <td class="col-num ${isDeposit ? "success" : "negative"}">${isDeposit ? "+" : "-"}${formatCurrency(t.amount)}</td>
+            <td class="col-num">${isDeposit ? "DEPOSIT" : "WITHDRAW"}</td>
+          </tr>
+        `;
+      }
       const pnl = t.realized_pnl || 0;
       return `
         <tr>

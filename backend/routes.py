@@ -27,16 +27,19 @@ except ImportError:
         _mongo_client = None
 
 try:
-    from .search import web_search_cached
+    from .search import web_search_cached, web_search_structured
 except ImportError:
     try:
-        from search import web_search_cached
+        from search import web_search_cached, web_search_structured
     except ImportError as e:
         logger.error("Failed to import search module: %s", e)
         logger.error("Install with: pip install ddgs>=9.14.0")
         def web_search_cached(query: str, max_results: int = 5) -> str:
             logger.warning("Web search called but ddgs is not installed")
             return ""
+        def web_search_structured(query: str, max_results: int = 5) -> list:
+            logger.warning("Web search called but ddgs is not installed")
+            return []
 
 router = APIRouter()
 
@@ -222,6 +225,8 @@ def _parse_portfolio_upload(upload_bytes: bytes):
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     portfolio_name = _last_non_empty_value(df.iloc[0]) or "portfolio"
+    if len(portfolio_name) > 60:
+        raise HTTPException(status_code=400, detail="Portfolio name too long (max 60 characters)")
     cash_value     = _to_float(_last_non_empty_value(df.iloc[2]), default=0.0)
 
     header_row_index = 4
@@ -539,6 +544,11 @@ async def upload_portfolio(file: UploadFile = File(...)):
         upload_bytes = await file.read()
         portfolio_name, cash_value, stock_documents = _parse_portfolio_upload(upload_bytes)
         collection_name    = _safe_collection_name(portfolio_name)
+        if collection_name in db.list_collection_names():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Portfolio '{portfolio_name}' already exists. Delete it first or choose a different name.",
+            )
         portfolio_collection = db[collection_name]
         portfolio_collection.drop()
 
@@ -852,8 +862,8 @@ async def sell_position(portfolio_id: str, ticker: str, request: SellRequest):
 
     if shares_val <= 0:
         raise HTTPException(status_code=400, detail="Shares must be positive")
-    if price_val < 0:
-        raise HTTPException(status_code=400, detail="Sell price must be non-negative")
+    if price_val <= 0:
+        raise HTTPException(status_code=400, detail="Sell price must be a positive number")
 
     collection = db[_safe_collection_name(portfolio_id)]
     existing   = collection.find_one({"ticker": ticker_upper})
@@ -931,6 +941,16 @@ async def deposit_cash(portfolio_id: str, request: CashRequest):
     )
     cash_doc = collection.find_one({"ticker": "CASH"})
     new_cash  = float(cash_doc.get("shares", 0)) if cash_doc else amount_val
+    try:
+        db[_safe_collection_name(portfolio_id) + "_trades"].insert_one({
+            "date":      _date.today().isoformat(),
+            "ticker":    "CASH",
+            "type":      "deposit",
+            "amount":    amount_val,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        })
+    except Exception as exc:
+        logger.warning("Failed to write cash deposit record: %s", exc)
     return {"message": "Cash deposited", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
 
 @router.post("/portfolios/{portfolio_id}/cash/withdraw")
@@ -952,6 +972,16 @@ async def withdraw_cash(portfolio_id: str, request: CashRequest):
     collection.update_one({"ticker": "CASH"}, {"$inc": {"shares": -amount_val}})
     updated_doc = collection.find_one({"ticker": "CASH"})
     new_cash    = float(updated_doc.get("shares", 0)) if updated_doc else 0
+    try:
+        db[_safe_collection_name(portfolio_id) + "_trades"].insert_one({
+            "date":      _date.today().isoformat(),
+            "ticker":    "CASH",
+            "type":      "withdraw",
+            "amount":    amount_val,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        })
+    except Exception as exc:
+        logger.warning("Failed to write cash withdrawal record: %s", exc)
     return {"message": "Cash withdrawn", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
 
 # ─── Portfolio heartrate (snapshots) ──────────────────────────────────────────
@@ -1346,6 +1376,62 @@ async def get_benchmark(symbol: str = "SPY", period: str = "1w"):
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Benchmark fetch failed: {exc}")
+
+# ─── Stock detail panel ───────────────────────────────────────────────────────
+
+_STOCK_DETAIL_CACHE: dict = {}
+_STOCK_DETAIL_TTL = 300  # 5 minutes
+
+@router.get("/market/stock-detail/{ticker}")
+async def get_stock_detail(ticker: str):
+    """Return 1M price history, key stats, and latest news for a single ticker."""
+    ticker = ticker.upper().strip()
+    if not re.match(r'^[A-Z0-9\-\^=\.]{1,12}$', ticker):
+        raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker}")
+
+    now = time.time()
+    if ticker in _STOCK_DETAIL_CACHE:
+        ts, cached = _STOCK_DETAIL_CACHE[ticker]
+        if now - ts < _STOCK_DETAIL_TTL:
+            return cached
+
+    def _fetch():
+        result = {"ticker": ticker, "prices": [], "stats": {}, "news": []}
+        try:
+            t = yf.Ticker(ticker)
+            hist = t.history(period="1mo")
+            if not hist.empty:
+                result["prices"] = [
+                    {"date": idx.strftime("%Y-%m-%d"), "close": round(float(row["Close"]), 2)}
+                    for idx, row in hist.iterrows()
+                    if not pd.isna(row["Close"])
+                ]
+            fi = t.fast_info
+            result["stats"] = {
+                "current_price":  round(float(getattr(fi, "last_price",   None) or 0), 2),
+                "day_change_pct": round(float(getattr(fi, "regular_market_change_percent", None) or 0), 2),
+                "market_cap":     int(getattr(fi, "market_cap", None) or 0),
+                "week_52_high":   round(float(getattr(fi, "year_high",  None) or 0), 2),
+                "week_52_low":    round(float(getattr(fi, "year_low",   None) or 0), 2),
+                "volume":         int(getattr(fi, "last_volume", None) or 0),
+            }
+        except Exception as exc:
+            logger.warning("stock-detail yfinance error for %s: %s", ticker, exc)
+
+        try:
+            result["news"] = web_search_structured(f"{ticker} stock news", max_results=5)
+        except Exception as exc:
+            logger.warning("stock-detail news error for %s: %s", ticker, exc)
+
+        return result
+
+    try:
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, _fetch)
+        _STOCK_DETAIL_CACHE[ticker] = (now, data)
+        return data
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Stock detail fetch failed: {exc}")
 
 # ─── AI chat ──────────────────────────────────────────────────────────────────
 

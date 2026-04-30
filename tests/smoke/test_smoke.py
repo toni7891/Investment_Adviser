@@ -490,6 +490,72 @@ def test_get_trades_empty():
     assert data["total_realized_pnl"] == 0.0
 
 
+def test_deposit_zero_amount():
+    """POST /portfolios/{id}/cash/deposit returns 400 for zero amount."""
+    client, _ = get_test_client()
+    response = client.post("/api/portfolios/TEST_ZERO_DEP/cash/deposit", json={"amount": 0})
+    assert response.status_code == 400
+
+
+def test_deposit_negative_amount():
+    """POST /portfolios/{id}/cash/deposit returns 400 for negative amount."""
+    client, _ = get_test_client()
+    response = client.post("/api/portfolios/TEST_NEG_DEP/cash/deposit", json={"amount": -100.0})
+    assert response.status_code == 400
+
+
+def test_withdraw_zero_amount():
+    """POST /portfolios/{id}/cash/withdraw returns 400 for zero amount."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_WITHDRAW_ZERO"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 100.0, "average_cost": 1.0})
+    response = client.post(f"/api/portfolios/{port_id}/cash/withdraw", json={"amount": 0})
+    assert response.status_code == 400
+
+
+def test_withdraw_all_cash():
+    """POST /portfolios/{id}/cash/withdraw can withdraw the full balance, leaving zero."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_WITHDRAW_ALL"
+    mock_db[port_id].insert_one({"ticker": "CASH", "shares": 500.0, "average_cost": 1.0})
+    response = client.post(f"/api/portfolios/{port_id}/cash/withdraw", json={"amount": 500.0})
+    assert response.status_code == 200
+    assert response.json()["new_cash"] == 0.0
+
+
+def test_sell_at_zero_price_rejected():
+    """POST /portfolios/{id}/positions/{ticker}/sell returns 400 for $0 sell price."""
+    client, mock_db = get_test_client()
+    port_id = "SMOKE_SELL_ZERO"
+    mock_db[port_id].insert_one({"ticker": "AAPL", "shares": 5.0, "average_cost": 150.0})
+    response = client.post(
+        f"/api/portfolios/{port_id}/positions/AAPL/sell",
+        json={"shares": 5, "sell_price": 0.0},
+    )
+    assert response.status_code == 400
+
+
+def test_upload_duplicate_portfolio_rejected():
+    """POST /portfolios/upload returns 409 when a portfolio with the same name already exists."""
+    import io
+    import pandas as pd
+
+    client, mock_db = get_test_client()
+    mock_db["DupPortfolio"].insert_one({"ticker": "CASH", "shares": 100.0, "average_cost": 1.0})
+
+    df = pd.DataFrame([["DupPortfolio"], [""], [1000], [""], ["Ticker", "Shares", "Average Cost"]])
+    output = io.BytesIO()
+    df.to_excel(output, index=False, header=False)
+    output.seek(0)
+
+    response = client.post(
+        "/api/portfolios/upload",
+        files={"file": ("dup.xlsx", output, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"]
+
+
 def test_list_portfolios_filters_history_and_trades():
     """GET /api/portfolios/list excludes _history and _trades companion collections."""
     client, mock_db = get_test_client()

@@ -159,14 +159,14 @@
     </div><!-- .main-grid -->
 
     <!-- Portfolio Heartrate -->
-    <section class="heartrate-section" id="heartrateSection">
+    <section class="heartrate-section collapsed" id="heartrateSection">
       <div class="pane-hdr">
         <div class="heartrate-left">
           <span class="pane-title">// PORTFOLIO HEARTRATE</span>
           <span id="heartrateChange" class="heartrate-change"></span>
         </div>
         <div class="heartrate-controls">
-          <button type="button" class="panel-toggle-btn" id="heartrateToggle">⊟ HIDE</button>
+          <button type="button" class="panel-toggle-btn" id="heartrateToggle">▶ SHOW</button>
           <div class="period-tabs">
             <button class="period-btn active" data-period="1w">1W</button>
             <button class="period-btn" data-period="1m">1M</button>
@@ -189,11 +189,11 @@
     </section>
 
     <!-- Sector Allocation (#8) -->
-    <section class="sector-section" id="sectorSection">
+    <section class="sector-section collapsed" id="sectorSection">
       <div class="pane-hdr">
         <span class="pane-title">// SECTOR ALLOCATION</span>
         <div class="pane-actions">
-          <button type="button" class="panel-toggle-btn" id="sectorToggle">⊟ HIDE</button>
+          <button type="button" class="panel-toggle-btn" id="sectorToggle">▶ SHOW</button>
         </div>
       </div>
       <div class="sector-body">
@@ -205,7 +205,7 @@
     </section>
 
     <!-- Trade History (#10) -->
-    <section class="trades-section" id="tradesSection">
+    <section class="trades-section collapsed" id="tradesSection">
       <div class="pane-hdr">
         <div class="trades-hdr-left">
           <span class="pane-title">// TRADE HISTORY</span>
@@ -213,7 +213,7 @@
           <span id="tradesTotalPnl" class="trades-total-val">──</span>
         </div>
         <div class="pane-actions">
-          <button type="button" class="panel-toggle-btn" id="tradesToggle">⊟ HIDE</button>
+          <button type="button" class="panel-toggle-btn" id="tradesToggle">▶ SHOW</button>
         </div>
       </div>
       <div class="trades-table-wrap">
@@ -351,7 +351,7 @@
           </div>
           <div class="field-grp">
             <label class="field-lbl" for="sellPriceInput">SELL PRICE ($)</label>
-            <input class="field-inp" type="number" id="sellPriceInput" step="0.01" min="0" required>
+            <input class="field-inp" type="number" id="sellPriceInput" step="0.01" min="0.01" required>
           </div>
         </div>
         <div id="sellProceedsDisplay" class="sell-proceeds"></div>
@@ -377,6 +377,20 @@
           <button type="submit" id="renameSubmitBtn" class="mbtn mbtn--confirm">RENAME</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Stock Detail Panel -->
+  <div id="stockDetailPanel" class="stock-detail-overlay" role="dialog" aria-modal="true" aria-labelledby="detailTicker">
+    <div class="stock-detail-panel">
+      <div class="sdp-header">
+        <span class="sdp-ticker" id="detailTicker">──</span>
+        <span class="sdp-subtitle">1-MONTH OVERVIEW</span>
+        <button class="sdp-close" id="detailClose" aria-label="Close detail panel">✕</button>
+      </div>
+      <div class="sdp-body" id="detailBody">
+        <div class="detail-loading">Loading…</div>
+      </div>
     </div>
   </div>
 
