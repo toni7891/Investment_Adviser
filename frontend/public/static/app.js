@@ -1,5 +1,7 @@
 /*****************************************************************************/
 /* Investment Strategist Dashboard — app.js v6.0 (ES module entry)          */
+/* Ref: [[state.js]] [[ui.js]] [[portfolio.js]] [[chart.js]] [[chat.js]]    */
+/* Ref: [[detail.js]] [[modals.js]] [[dashboard.html]] [[PROJECT_MAP.md]]   */
 /*****************************************************************************/
 
 import { state }                                         from "./modules/state.js";
@@ -121,6 +123,16 @@ if (isDashboard) {
     // Period tabs
     document.querySelectorAll(".period-btn").forEach((btn) => {
       btn.addEventListener("click", () => loadHeartrate(btn.dataset.period));
+    });
+
+    // Chart mode toggle (VALUE / P&L)
+    const chartModeBtn = document.getElementById("chartModeBtn");
+    chartModeBtn?.addEventListener("click", () => {
+      state.chartMode = state.chartMode === "value" ? "pnl" : "value";
+      const isPnl = state.chartMode === "pnl";
+      chartModeBtn.classList.toggle("act-btn--active", isPnl);
+      chartModeBtn.textContent = isPnl ? "P&L ✓" : "P&L";
+      if (state.currentPortfolioId) loadHeartrate(state.currentPeriod);
     });
 
     // Benchmark toggle

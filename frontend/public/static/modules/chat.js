@@ -1,3 +1,4 @@
+// Ref: [[state.js]] [[ui.js]] [[app.js]] [[routes.py]] [[PROJECT_MAP.md]]
 import { state } from "./state.js";
 import { showToast } from "./ui.js";
 

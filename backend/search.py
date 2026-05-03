@@ -1,6 +1,7 @@
 """
 Web search module using DuckDuckGo (via ddgs package).
 Provides: web_search_cached(query, max_results=5) -> str
+Ref: [[routes.py]] [[PROJECT_MAP.md]]
 """
 
 from ddgs import DDGS

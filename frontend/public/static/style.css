@@ -951,6 +951,11 @@ a { color: var(--amber); }
   color: #0a1622;
 }
 
+.act-btn--blue.act-btn--active {
+  background: var(--blue);
+  color: #0a1622;
+}
+
 .panel-toggle-btn {
   height: 22px;
   padding: 0 8px;

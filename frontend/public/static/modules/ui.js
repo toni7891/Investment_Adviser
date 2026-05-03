@@ -1,3 +1,4 @@
+// Ref: [[portfolio.js]] [[modals.js]] [[chat.js]] [[app.js]] [[PROJECT_MAP.md]]
 // ─── Toast ────────────────────────────────────────────────────────────────────
 export function showToast(message, type = "error") {
   const toastContainer = document.getElementById("toastContainer");

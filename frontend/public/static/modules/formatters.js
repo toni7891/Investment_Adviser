@@ -1,3 +1,4 @@
+// Ref: [[portfolio.js]] [[chart.js]] [[modals.js]] [[detail.js]] [[PROJECT_MAP.md]]
 export const formatCurrency = (value) =>
   `$${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,

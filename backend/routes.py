@@ -1,3 +1,4 @@
+# Ref: [[database.py]] [[search.py]] [[main.py]] [[PROJECT_MAP.md]]
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from io import BytesIO
 import asyncio
@@ -5,7 +6,7 @@ import httpx
 import logging
 import os
 import time
-from datetime import datetime, date as _date, timedelta
+from datetime import datetime, date as _date, timedelta, timezone
 import pandas as pd
 import yfinance as yf
 import re
@@ -432,23 +433,40 @@ def _validate_ticker(ticker: str) -> tuple[bool, str]:
 
 _SLOT_ORDER = {"open": 0, "midday": 1, "close": 2, "eod": 2}
 
-def _current_market_slot() -> str:
-    """Return 'open', 'midday', or 'close' based on current US Eastern time."""
+def _current_market_slot() -> str | None:
+    """Return 'open', 'midday', or 'close' based on current US Eastern time.
+
+    Returns None outside of market hours (weekends, pre-market before 9:30, holidays).
+    """
     try:
         if _pytz:
             et = _pytz.timezone("America/New_York")
             now_et = datetime.now(et)
         else:
-            import datetime as _dt
-            now_et = _dt.datetime.utcnow()  # rough fallback
+            from datetime import timezone, timedelta
+            # Determine EDT vs EST offset correctly
+            import time as _time
+            dst_active = _time.daylight and _time.localtime().tm_isdst
+            et_offset = timedelta(hours=-4 if dst_active else -5)
+            now_et = datetime.now(timezone.utc).astimezone(timezone(et_offset))
+
+        # No snapshots on weekends (0=Mon … 6=Sun)
+        if now_et.weekday() >= 5:
+            return None
+
         mins = now_et.hour * 60 + now_et.minute
+
+        # Before market open (9:30 ET) — skip
+        if mins < 9 * 60 + 30:
+            return None
+
         if mins < 12 * 60 + 45:
             return "open"
         if mins < 16 * 60:
             return "midday"
         return "close"
     except Exception:
-        return "close"
+        return None
 
 def _snapshot_doc(portfolio_id: str, total_balance: float, invested_value: float,
                   cash_value: float, slot: str) -> dict:
@@ -458,7 +476,7 @@ def _snapshot_doc(portfolio_id: str, total_balance: float, invested_value: float
         "total_value":    round(total_balance, 2),
         "invested_value": round(invested_value, 2),
         "cash_value":     round(cash_value, 2),
-        "timestamp":      datetime.utcnow().isoformat() + "Z",
+        "timestamp":      datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 def _maybe_record_snapshot(portfolio_id: str, total_balance: float, invested_value: float, cash_value: float):
@@ -466,7 +484,9 @@ def _maybe_record_snapshot(portfolio_id: str, total_balance: float, invested_val
     if db is None:
         return
     try:
-        slot      = _current_market_slot()
+        slot = _current_market_slot()
+        if slot is None:
+            return  # outside market hours or weekend — skip
         today_str = _date.today().isoformat()
         hist_col  = db[_safe_collection_name(portfolio_id) + "_history"]
         if not hist_col.find_one({"date": today_str, "slot": slot}):
@@ -477,7 +497,7 @@ def _maybe_record_snapshot(portfolio_id: str, total_balance: float, invested_val
 def _force_record_snapshot(portfolio_id: str, total_balance: float, invested_value: float,
                             cash_value: float) -> dict:
     """Always upsert a snapshot for the current slot today (manual button)."""
-    slot      = _current_market_slot()
+    slot      = _current_market_slot() or "close"  # manual override: default to 'close' outside hours
     today_str = _date.today().isoformat()
     doc       = _snapshot_doc(portfolio_id, total_balance, invested_value, cash_value, slot)
     if db is not None:
@@ -643,7 +663,7 @@ async def get_portfolio(portfolio_id: str):
                 data = await loop.run_in_executor(None, _download_prices)
                 for t in tickers:
                     try:
-                        ticker_df = data if len(tickers) == 1 else data[t]
+                        ticker_df = data[t]  # raises KeyError → handled below if ticker absent
                         if not ticker_df.empty and len(ticker_df) >= 1:
                             curr = ticker_df["Close"].iloc[-1]
                             prev = ticker_df["Close"].iloc[-2] if len(ticker_df) > 1 else curr
@@ -909,7 +929,7 @@ async def sell_position(portfolio_id: str, ticker: str, request: SellRequest):
         "avg_cost":     avg_cost_sold,
         "proceeds":     round(proceeds, 2),
         "realized_pnl": realized_pnl,
-        "timestamp":    datetime.utcnow().isoformat() + "Z",
+        "timestamp":    datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     try:
         db[_safe_collection_name(portfolio_id) + "_trades"].insert_one(trade_doc)
@@ -947,7 +967,7 @@ async def deposit_cash(portfolio_id: str, request: CashRequest):
             "ticker":    "CASH",
             "type":      "deposit",
             "amount":    amount_val,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         })
     except Exception as exc:
         logger.warning("Failed to write cash deposit record: %s", exc)
@@ -978,7 +998,7 @@ async def withdraw_cash(portfolio_id: str, request: CashRequest):
             "ticker":    "CASH",
             "type":      "withdraw",
             "amount":    amount_val,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         })
     except Exception as exc:
         logger.warning("Failed to write cash withdrawal record: %s", exc)
@@ -1119,7 +1139,7 @@ async def import_snapshots(portfolio_id: str, file: UploadFile = File(...)):
                     "total_value":    _to_float(row.get(total_col)    if total_col    else 0),
                     "invested_value": _to_float(row.get(invested_col) if invested_col else 0),
                     "cash_value":     _to_float(row.get(cash_col)     if cash_col     else 0),
-                    "timestamp":      datetime.utcnow().isoformat() + "Z",
+                    "timestamp":      datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 }
                 hist_col.update_one({"date": raw_date, "slot": "eod"}, {"$set": doc}, upsert=True)
                 inserted += 1
@@ -1291,7 +1311,7 @@ async def get_ticker_tape():
 
     loop  = asyncio.get_running_loop()
     items = await loop.run_in_executor(None, _fetch)
-    result = {"items": items, "updated_at": datetime.utcnow().isoformat() + "Z"}
+    result = {"items": items, "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
     _TAPE_CACHE["data"] = result
     _TAPE_CACHE["ts"]   = now
     return result
@@ -1407,13 +1427,33 @@ async def get_stock_detail(ticker: str):
                     if not pd.isna(row["Close"])
                 ]
             fi = t.fast_info
+            last  = float(getattr(fi, "last_price", None) or 0)
+            # Compute day change from adjusted history (same source as portfolio table)
+            # so the % matches what the positions table shows.
+            closes = hist["Close"].dropna() if not hist.empty else pd.Series([], dtype=float)
+            if len(closes) >= 2:
+                prev_adj = float(closes.iloc[-2])
+                curr_adj = float(closes.iloc[-1])
+                day_chg_pct = round(((curr_adj - prev_adj) / prev_adj * 100), 2) if prev_adj > 0 else 0.0
+            else:
+                prev = float(getattr(fi, "previous_close", None) or 0)
+                day_chg_pct = round(((last - prev) / prev * 100), 2) if prev > 0 else 0.0
+            pe_ratio = None
+            try:
+                info     = t.info
+                pe_ratio = info.get("trailingPE") or info.get("forwardPE")
+                if pe_ratio:
+                    pe_ratio = round(float(pe_ratio), 2)
+            except Exception:
+                pass
             result["stats"] = {
-                "current_price":  round(float(getattr(fi, "last_price",   None) or 0), 2),
-                "day_change_pct": round(float(getattr(fi, "regular_market_change_percent", None) or 0), 2),
+                "current_price":  round(last, 2),
+                "day_change_pct": day_chg_pct,
                 "market_cap":     int(getattr(fi, "market_cap", None) or 0),
                 "week_52_high":   round(float(getattr(fi, "year_high",  None) or 0), 2),
                 "week_52_low":    round(float(getattr(fi, "year_low",   None) or 0), 2),
                 "volume":         int(getattr(fi, "last_volume", None) or 0),
+                "pe_ratio":       pe_ratio,
             }
         except Exception as exc:
             logger.warning("stock-detail yfinance error for %s: %s", ticker, exc)

@@ -1,4 +1,4 @@
-.env
+# .graphifyignore
 node_modules
 old_styles
 old_js
@@ -25,11 +25,5 @@ debug_yfinance.py
 old_files
 injection.py
 4RCH3R_history.xlsx
-graphify-out
-.superpowers/brainstorm
-.obsidian
-.claude
-SEC_REPORT.md
-# CLAUDE.md
-# .claude
-# .superpowers
+.superpowers
+.venv

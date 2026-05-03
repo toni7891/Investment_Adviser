@@ -1,3 +1,4 @@
+// Ref: [[state.js]] [[formatters.js]] [[ui.js]] [[portfolio.js]] [[app.js]] [[PROJECT_MAP.md]]
 import { state } from "./state.js";
 import { formatCurrency } from "./formatters.js";
 import { showToast, setFieldError, clearFieldErrors } from "./ui.js";

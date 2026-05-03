@@ -1,3 +1,4 @@
+// Ref: [[formatters.js]] [[app.js]] [[routes.py]] [[PROJECT_MAP.md]]
 import { formatCurrency, formatPercent } from "./formatters.js";
 
 let _chart = null;
@@ -55,6 +56,10 @@ function _renderDetail(data) {
       <div class="ds-item">
         <span class="ds-lbl">VOLUME</span>
         <span class="ds-val">${(stats.volume || 0).toLocaleString()}</span>
+      </div>
+      <div class="ds-item">
+        <span class="ds-lbl">P/E</span>
+        <span class="ds-val">${stats.pe_ratio != null ? stats.pe_ratio.toFixed(2) : "N/A"}</span>
       </div>
     </div>
     <div class="detail-chart-wrap">

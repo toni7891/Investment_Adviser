@@ -1,3 +1,4 @@
+// Ref: [[state.js]] [[formatters.js]] [[portfolio.js]] [[app.js]] [[PROJECT_MAP.md]]
 import { state } from "./state.js";
 import { formatCurrency } from "./formatters.js";
 
@@ -52,11 +53,20 @@ export async function loadHeartrate(period) {
       const suffix = dateCounts[s.date] > 1 && s.slot ? ` ${SLOT_LABEL[s.slot] || s.slot}` : "";
       return s.date + suffix;
     });
-    const values    = snapshots.map((s) => s.total_value);
-    const portStart = values[0] || 0;
-    const isUp      = (values[values.length - 1] || 0) >= portStart;
+    const rawValues = snapshots.map((s) => s.total_value);
+    const portStart = rawValues[0] || 0;
+    const isPnlMode = state.chartMode === "pnl";
+    const values    = isPnlMode ? rawValues.map((v) => parseFloat((v - portStart).toFixed(2))) : rawValues;
+    const lastVal   = values[values.length - 1] || 0;
+    const isUp      = lastVal >= 0;
     const lineColor = isUp ? "#00d97e" : "#ff4560";
     const fillColor = isUp ? "rgba(0,217,126,0.07)" : "rgba(255,69,96,0.07)";
+
+    const fmtTooltip = (v) => {
+      if (!isPnlMode) return formatCurrency(v);
+      const sign = v >= 0 ? "+" : "";
+      return `${sign}${formatCurrency(v)}`;
+    };
 
     const datasets = [{
       label:                     "Portfolio",
@@ -82,7 +92,8 @@ export async function loadHeartrate(period) {
           const candidates = sortedDates.filter((d) => d <= s.date);
           const nearest    = candidates.length > 0 ? candidates[candidates.length - 1] : sortedDates[0];
           const spyPrice   = spyByDate[nearest];
-          return spyPrice ? parseFloat((portStart * (spyPrice / spyStart)).toFixed(2)) : null;
+          const scaled     = spyPrice ? parseFloat((portStart * (spyPrice / spyStart)).toFixed(2)) : null;
+          return scaled !== null && isPnlMode ? parseFloat((scaled - portStart).toFixed(2)) : scaled;
         });
         datasets.push({
           label:           "SPY",
@@ -119,7 +130,7 @@ export async function loadHeartrate(period) {
             titleColor: "#6b879e", bodyColor: "#d8e4ee",
             titleFont: { family: "'IBM Plex Mono', monospace", size: 10 },
             bodyFont:  { family: "'IBM Plex Mono', monospace", size: 12 },
-            callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}` },
+            callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmtTooltip(ctx.raw)}` },
           },
         },
         scales: {
@@ -131,7 +142,11 @@ export async function loadHeartrate(period) {
             grid: { color: "rgba(255,255,255,0.03)" }, border: { display: false },
             ticks: {
               color: "#2e4a60", font: { family: "'IBM Plex Mono', monospace", size: 9 },
-              callback: (v) => "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }),
+              callback: (v) => {
+                if (!isPnlMode) return "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const sign = v >= 0 ? "+" : "";
+                return sign + "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+              },
             },
           },
         },

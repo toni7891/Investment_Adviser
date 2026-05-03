@@ -1,3 +1,4 @@
+// Ref: [[state.js]] [[formatters.js]] [[ui.js]] [[chart.js]] [[modals.js]] [[app.js]] [[PROJECT_MAP.md]]
 import { state } from "./state.js";
 import { formatCurrency, formatPercent, setSignedStatus } from "./formatters.js";
 import { showToast, showConfirm } from "./ui.js";
