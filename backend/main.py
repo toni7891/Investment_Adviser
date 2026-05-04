@@ -5,7 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 import sys
+import logging
 import warnings
+
+logger = logging.getLogger(__name__)
 
 # Suppress ResourceWarning about unclosed SQLite databases from third-party libraries
 # These are harmless and come from dependencies we don't control
@@ -26,7 +29,7 @@ app.include_router(routes.router, prefix="/api", tags=["api"])
 
 @app.on_event("startup")
 def on_startup():
-    print("Backend server starting up...")
+    logger.info("Backend server starting up...")
 
 @app.on_event("shutdown")
 def on_shutdown():
@@ -36,7 +39,7 @@ def on_shutdown():
         from database import close_connection
         close_connection()
     except Exception as e:
-        print(f"[ERROR] Error during shutdown cleanup: {e}")
+        logger.error("Error during shutdown cleanup: %s", e)
 
 
 @app.get("/status", response_model=dict, include_in_schema=True)

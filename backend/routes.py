@@ -356,7 +356,6 @@ async def call_ai_backend(user_message: str) -> dict:
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user",   "content": user_message},
                 ],
-                "max_tokens": 4096,
                 "stream":     False,
             }
             logger.debug("Sending to %s, message length=%d", AI_BACKEND_NAME, len(user_message))
