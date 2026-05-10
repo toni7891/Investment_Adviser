@@ -1,5 +1,5 @@
 # Ref: [[database.py]] [[search.py]] [[main.py]] [[PROJECT_MAP.md]]
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from io import BytesIO
 import asyncio
 import httpx
@@ -26,6 +26,11 @@ except ImportError:
         from database import client as _mongo_client
     except ImportError:
         _mongo_client = None
+
+try:
+    from .auth import get_current_user, get_current_user_allow_force_change, get_current_admin, check_portfolio_access, hash_password, verify_password, create_access_token
+except ImportError:
+    from auth import get_current_user, get_current_user_allow_force_change, get_current_admin, check_portfolio_access, hash_password, verify_password, create_access_token
 
 try:
     from .search import web_search_cached, web_search_structured
@@ -66,6 +71,14 @@ class ChatRequest(BaseModel):
 
 class RenameRequest(BaseModel):
     new_name: str
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # ─── Transaction helper ────────────────────────────────────────────────────────
 
@@ -303,20 +316,28 @@ def _parse_portfolio_upload(upload_bytes: bytes):
 
 # ─── AI backend configuration ─────────────────────────────────────────────────
 
-LLM_BACKEND      = os.getenv("LLM_BACKEND", "lmstudio").lower()
+LLM_BACKEND       = os.getenv("LLM_BACKEND", "lmstudio").lower()
 LM_STUDIO_API_URL = os.getenv("LM_STUDIO_API_URL", "http://localhost:1234/v1/chat/completions")
-OLLAMA_API_URL   = os.getenv("OLLAMA_API_URL", "http://localhost:11434/v1/chat/completions")
-OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "llama3")
-SSL_VERIFY       = os.getenv("SSL_VERIFY", "true").lower() != "false"
+LM_STUDIO_MODEL   = os.getenv("LM_STUDIO_MODEL", "*")
+OLLAMA_API_URL    = os.getenv("OLLAMA_API_URL", "http://localhost:11434/v1/chat/completions")
+OLLAMA_MODEL      = os.getenv("OLLAMA_MODEL", "llama3")
+GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
+BEDROCK_MODEL     = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+BEDROCK_REGION    = os.getenv("BEDROCK_REGION", "us-east-1")
+SSL_VERIFY        = os.getenv("SSL_VERIFY", "true").lower() != "false"
 
 if LLM_BACKEND == "ollama":
     AI_API_URL      = OLLAMA_API_URL
     AI_MODEL        = OLLAMA_MODEL
     AI_BACKEND_NAME = "Ollama"
+elif LLM_BACKEND == "bedrock":
+    AI_API_URL      = ""
+    AI_MODEL        = BEDROCK_MODEL
+    AI_BACKEND_NAME = "AWS Bedrock"
 else:
     AI_API_URL      = LM_STUDIO_API_URL
-    AI_MODEL        = "*"
-    AI_BACKEND_NAME = "LM Studio"
+    AI_MODEL        = LM_STUDIO_MODEL
+    AI_BACKEND_NAME = "LM Studio / Groq"
 
 AI_SYSTEM_PROMPT = """You are a helpful financial assistant with access to the user's portfolio data and/or web search results when provided.
 
@@ -343,6 +364,30 @@ When no context is available:
 Keep responses concise, informative, and focused on the user's specific question."""
 
 async def call_ai_backend(user_message: str) -> dict:
+    # ── AWS Bedrock branch ────────────────────────────────────────────────────
+    if LLM_BACKEND == "bedrock":
+        import boto3, json as _json
+
+        def _invoke_bedrock():
+            client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+            body = _json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2048,
+                "system": AI_SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": user_message}],
+            })
+            response = client.invoke_model(modelId=BEDROCK_MODEL, body=body)
+            result = _json.loads(response["body"].read())
+            return result["content"][0]["text"]
+
+        logger.info("Calling AWS Bedrock model %s in %s", BEDROCK_MODEL, BEDROCK_REGION)
+        try:
+            reply_text = await asyncio.get_event_loop().run_in_executor(None, _invoke_bedrock)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"AWS Bedrock error: {e}")
+        return {"choices": [{"message": {"content": reply_text}}]}
+
+    # ── OpenAI-compatible branch (LM Studio / Groq / Ollama) ─────────────────
     logger.info("Calling AI backend at %s", AI_API_URL)
     try:
         async with httpx.AsyncClient(timeout=300.0, verify=SSL_VERIFY) as client:
@@ -350,6 +395,8 @@ async def call_ai_backend(user_message: str) -> dict:
                 "Content-Type": "application/json",
                 "Accept":       "application/json",
             }
+            if GROQ_API_KEY:
+                headers["Authorization"] = f"Bearer {GROQ_API_KEY}"
             payload = {
                 "model":      AI_MODEL,
                 "messages": [
@@ -371,7 +418,7 @@ async def call_ai_backend(user_message: str) -> dict:
 
             try:
                 return response.json()
-            except Exception as e:
+            except Exception:
                 raise HTTPException(
                     status_code=502,
                     detail=f"Invalid JSON from {AI_BACKEND_NAME}: {response.text[:200]}",
@@ -526,6 +573,156 @@ _TAPE_TTL   = 300   # 5 minutes
 _FNG_CACHE: dict = {"data": None, "ts": 0.0}
 _FNG_TTL    = 3600  # 1 hour
 
+# ─── Auth routes ──────────────────────────────────────────────────────────────
+
+@router.post("/auth/signup")
+async def signup(request: SignupRequest):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    username = request.username.strip()
+    if not re.match(r'^[a-zA-Z0-9_]{3,40}$', username):
+        raise HTTPException(status_code=400, detail="Username must be 3–40 characters: letters, digits, underscores only")
+    if len(request.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    if db["users"].find_one({"username": username}):
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    db["users"].insert_one({
+        "username":     username,
+        "password_hash": hash_password(request.password),
+        "role":         "user",
+        "created_at":   datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    })
+    token = create_access_token({"sub": username, "role": "user"})
+    return {"access_token": token, "token_type": "bearer", "username": username, "role": "user"}
+
+
+@router.post("/auth/login")
+async def login(request: LoginRequest):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    user = db["users"].find_one({"username": request.username.strip()})
+    if not user or not verify_password(request.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    username              = user["username"]
+    role                  = user.get("role", "user")
+    force_pw_change       = bool(user.get("force_password_change", False))
+    token_version         = user.get("token_version", 0)
+    payload               = {"sub": username, "role": role, "tv": token_version}
+    if force_pw_change:
+        payload["force_password_change"] = True
+    token = create_access_token(payload)
+    return {
+        "access_token":          token,
+        "token_type":            "bearer",
+        "username":              username,
+        "role":                  role,
+        "force_password_change": force_pw_change,
+    }
+
+
+@router.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return {"username": current_user["username"], "role": current_user["role"]}
+
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+    current_password: str | None = None
+
+@router.patch("/auth/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user_allow_force_change)):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    user_doc = db["users"].find_one({"username": current_user["username"]})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Require current password unless this is a forced-change flow
+    if not user_doc.get("force_password_change", False):
+        if not request.current_password:
+            raise HTTPException(status_code=400, detail="Current password is required")
+        if not verify_password(request.current_password, user_doc["password_hash"]):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+    # Increment token_version to invalidate all existing tokens for this user
+    result = db["users"].find_one_and_update(
+        {"username": current_user["username"]},
+        {"$set": {"password_hash": hash_password(request.new_password), "force_password_change": False},
+         "$inc": {"token_version": 1}},
+        return_document=True,
+        projection={"_id": 0, "password_hash": 0},
+    )
+    new_version = result.get("token_version", 1)
+    new_token   = create_access_token({
+        "sub":  current_user["username"],
+        "role": current_user.get("role", "user"),
+        "tv":   new_version,
+    })
+    return {"message": "Password updated", "access_token": new_token, "token_type": "bearer"}
+
+
+class ChangeUsernameRequest(BaseModel):
+    current_password: str
+    new_username: str
+
+@router.patch("/auth/change-username")
+async def change_username(request: ChangeUsernameRequest, current_user: dict = Depends(get_current_user)):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    new_username = request.new_username.strip()
+    if not re.match(r'^[a-zA-Z0-9_]{3,40}$', new_username):
+        raise HTTPException(status_code=400, detail="Username must be 3-40 characters (letters, numbers, underscores)")
+    user_doc = db["users"].find_one({"username": current_user["username"]})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not verify_password(request.current_password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    if new_username.lower() == current_user["username"].lower():
+        raise HTTPException(status_code=400, detail="New username must differ from current username")
+    if db["users"].find_one({"username": new_username}):
+        raise HTTPException(status_code=409, detail="Username already taken")
+    db["users"].update_one(
+        {"username": current_user["username"]},
+        {"$set": {"username": new_username}, "$inc": {"token_version": 1}},
+    )
+    db["portfolio_metadata"].update_many(
+        {"owner_username": current_user["username"]},
+        {"$set": {"owner_username": new_username}},
+    )
+    user_doc = db["users"].find_one({"username": new_username}, {"_id": 0, "password_hash": 0})
+    new_version = user_doc.get("token_version", 1)
+    new_token   = create_access_token({
+        "sub":  new_username,
+        "role": current_user.get("role", "user"),
+        "tv":   new_version,
+    })
+    return {"message": "Username updated", "access_token": new_token, "token_type": "bearer", "username": new_username}
+
+
+@router.get("/admin/portfolios")
+async def admin_list_all_portfolios(_admin: dict = Depends(get_current_admin)):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    meta_docs = list(db["portfolio_metadata"].find({}, {"_id": 0}))
+    owned_ids = {m["portfolio_id"] for m in meta_docs}
+
+    all_cols = db.list_collection_names()
+    legacy   = [
+        {"portfolio_id": c, "owner_username": None}
+        for c in all_cols
+        if not c.startswith("system.") and not c.endswith("_history") and not c.endswith("_trades")
+        and c not in owned_ids
+        and c not in ("users", "portfolio_metadata")
+    ]
+    return {"portfolios": meta_docs + legacy}
+
+
 # ─── Portfolio routes ──────────────────────────────────────────────────────────
 
 @router.get("/portfolios")
@@ -542,21 +739,30 @@ async def get_default_portfolio():
 
 
 @router.get("/portfolios/list")
-async def list_portfolio_names():
+async def list_portfolio_names(current_user: dict = Depends(get_current_user)):
     if db is None:
         return {"portfolios": [], "warning": "Database disconnected"}
-    
-    collections = db.list_collection_names()
-    
-    filtered_portfolios = [
-        c for c in collections
-        if not c.startswith("system.") and not c.endswith("_history") and not c.endswith("_trades")
-    ]
-    
-    return {"portfolios": filtered_portfolios}
+
+    if current_user["role"] == "admin":
+        collections = db.list_collection_names()
+        names = [
+            c for c in collections
+            if not c.startswith("system.")
+            and not c.endswith("_history")
+            and not c.endswith("_trades")
+            and c not in ("users", "portfolio_metadata")
+        ]
+    else:
+        meta_docs = db["portfolio_metadata"].find(
+            {"owner_username": current_user["username"]},
+            {"_id": 0, "portfolio_id": 1},
+        )
+        names = [doc["portfolio_id"] for doc in meta_docs]
+
+    return {"portfolios": names}
 
 @router.post("/portfolios/upload")
-async def upload_portfolio(file: UploadFile = File(...)):
+async def upload_portfolio(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable — cannot upload portfolio")
     try:
@@ -612,6 +818,16 @@ async def upload_portfolio(file: UploadFile = File(...)):
         if documents_to_insert:
             portfolio_collection.insert_many(documents_to_insert)
 
+        db["portfolio_metadata"].update_one(
+            {"portfolio_id": collection_name},
+            {"$set": {
+                "portfolio_id":    collection_name,
+                "owner_username":  current_user["username"],
+                "created_at":      datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }},
+            upsert=True,
+        )
+
         return {
             "message":         "Portfolio uploaded successfully",
             "portfolio_name":  portfolio_name,
@@ -624,7 +840,8 @@ async def upload_portfolio(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Failed to upload: {exc}")
 
 @router.get("/portfolios/{portfolio_id}")
-async def get_portfolio(portfolio_id: str):
+async def get_portfolio(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
@@ -730,7 +947,8 @@ async def get_portfolio(portfolio_id: str):
 # ─── Portfolio management ──────────────────────────────────────────────────────
 
 @router.delete("/portfolios/{portfolio_id}")
-async def delete_portfolio(portfolio_id: str):
+async def delete_portfolio(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     collection_name = _safe_collection_name(portfolio_id)
@@ -739,12 +957,14 @@ async def delete_portfolio(portfolio_id: str):
     db[collection_name].drop()
     db[collection_name + "_history"].drop()
     db[collection_name + "_trades"].drop()
+    db["portfolio_metadata"].delete_one({"portfolio_id": collection_name})
     return {"message": f"Portfolio '{portfolio_id}' deleted successfully"}
 
 # ─── Portfolio rename (#9) ───────────────────────────────────────────────────
 
 @router.post("/portfolios/{portfolio_id}/rename")
-async def rename_portfolio(portfolio_id: str, request: RenameRequest):
+async def rename_portfolio(portfolio_id: str, request: RenameRequest, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     new_name = request.new_name.strip()
@@ -774,12 +994,18 @@ async def rename_portfolio(portfolio_id: str, request: RenameRequest):
     _copy_and_drop(old_col + "_history", new_col + "_history")
     _copy_and_drop(old_col + "_trades",  new_col + "_trades")
 
+    db["portfolio_metadata"].update_one(
+        {"portfolio_id": old_col},
+        {"$set": {"portfolio_id": new_col}},
+    )
+
     return {"message": f"Portfolio renamed to '{new_name}'", "new_id": new_name}
 
 # ─── Position management ───────────────────────────────────────────────────────
 
 @router.delete("/portfolios/{portfolio_id}/positions/{ticker}")
-async def remove_position(portfolio_id: str, ticker: str):
+async def remove_position(portfolio_id: str, ticker: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     ticker_upper = ticker.strip().upper()
@@ -790,7 +1016,8 @@ async def remove_position(portfolio_id: str, ticker: str):
     return {"message": "Position removed", "ticker": ticker_upper, "deleted_count": result.deleted_count}
 
 @router.post("/portfolios/{portfolio_id}/positions")
-async def add_position(portfolio_id: str, request: PositionRequest):
+async def add_position(portfolio_id: str, request: PositionRequest, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
@@ -871,7 +1098,8 @@ async def add_position(portfolio_id: str, request: PositionRequest):
 
 
 @router.post("/portfolios/{portfolio_id}/positions/{ticker}/sell")
-async def sell_position(portfolio_id: str, ticker: str, request: SellRequest):
+async def sell_position(portfolio_id: str, ticker: str, request: SellRequest, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
@@ -945,7 +1173,8 @@ async def sell_position(portfolio_id: str, ticker: str, request: SellRequest):
 # ─── Cash management ──────────────────────────────────────────────────────────
 
 @router.post("/portfolios/{portfolio_id}/cash/deposit")
-async def deposit_cash(portfolio_id: str, request: CashRequest):
+async def deposit_cash(portfolio_id: str, request: CashRequest, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     amount_val = request.amount
@@ -973,7 +1202,8 @@ async def deposit_cash(portfolio_id: str, request: CashRequest):
     return {"message": "Cash deposited", "portfolio_id": portfolio_id, "new_cash": new_cash, "amount": amount_val}
 
 @router.post("/portfolios/{portfolio_id}/cash/withdraw")
-async def withdraw_cash(portfolio_id: str, request: CashRequest):
+async def withdraw_cash(portfolio_id: str, request: CashRequest, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     amount_val = request.amount
@@ -1006,7 +1236,8 @@ async def withdraw_cash(portfolio_id: str, request: CashRequest):
 # ─── Portfolio heartrate (snapshots) ──────────────────────────────────────────
 
 @router.get("/portfolios/{portfolio_id}/snapshots/export")
-async def export_snapshots(portfolio_id: str):
+async def export_snapshots(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     from fastapi.responses import StreamingResponse
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
@@ -1040,7 +1271,8 @@ async def export_snapshots(portfolio_id: str):
 
 
 @router.get("/portfolios/{portfolio_id}/snapshots")
-async def get_snapshots(portfolio_id: str, period: str = "1w"):
+async def get_snapshots(portfolio_id: str, period: str = "1w", current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
@@ -1071,8 +1303,9 @@ async def get_snapshots(portfolio_id: str, period: str = "1w"):
 
 
 @router.post("/portfolios/{portfolio_id}/snapshot")
-async def take_manual_snapshot(portfolio_id: str):
+async def take_manual_snapshot(portfolio_id: str, current_user: dict = Depends(get_current_user)):
     """Force-record a snapshot for the current slot, replacing any existing one today."""
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     collection_name = _safe_collection_name(portfolio_id)
@@ -1080,7 +1313,7 @@ async def take_manual_snapshot(portfolio_id: str):
         raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio_id}' not found")
     # Reuse get_portfolio to obtain live values (it also calls _maybe_record_snapshot,
     # but we then force-overwrite with _force_record_snapshot)
-    portfolio_data = await get_portfolio(portfolio_id)
+    portfolio_data = await get_portfolio(portfolio_id, current_user)
     doc = _force_record_snapshot(
         portfolio_id,
         portfolio_data["total_balance"],
@@ -1091,10 +1324,11 @@ async def take_manual_snapshot(portfolio_id: str):
 
 
 @router.post("/portfolios/{portfolio_id}/snapshots/import")
-async def import_snapshots(portfolio_id: str, file: UploadFile = File(...)):
+async def import_snapshots(portfolio_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """Import historical snapshots from an Excel file.
     Expected columns (by name or position): date, total_value, invested_value, cash_value.
     """
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
@@ -1156,12 +1390,13 @@ async def import_snapshots(portfolio_id: str, file: UploadFile = File(...)):
 # ─── Positions export (#14) ───────────────────────────────────────────────────
 
 @router.get("/portfolios/{portfolio_id}/positions/export")
-async def export_positions(portfolio_id: str):
+async def export_positions(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     from fastapi.responses import StreamingResponse
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
-    portfolio_data = await get_portfolio(portfolio_id)
+    portfolio_data = await get_portfolio(portfolio_id, current_user)
     positions      = portfolio_data.get("positions", [])
     cash_val       = portfolio_data.get("cash_value", 0.0)
 
@@ -1200,7 +1435,8 @@ async def export_positions(portfolio_id: str):
 # ─── Trade history (#10) ──────────────────────────────────────────────────────
 
 @router.get("/portfolios/{portfolio_id}/trades")
-async def get_trades(portfolio_id: str):
+async def get_trades(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
     trades_col = db[_safe_collection_name(portfolio_id) + "_trades"]
@@ -1215,11 +1451,12 @@ _SECTOR_CACHE: dict = {}
 _SECTOR_TTL   = 3600  # 1 hour
 
 @router.get("/portfolios/{portfolio_id}/sectors")
-async def get_sector_allocation(portfolio_id: str):
+async def get_sector_allocation(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    check_portfolio_access(portfolio_id, current_user)
     if db is None:
         raise HTTPException(status_code=503, detail="Database disconnected")
 
-    portfolio_data = await get_portfolio(portfolio_id)
+    portfolio_data = await get_portfolio(portfolio_id, current_user)
     positions      = portfolio_data.get("positions", [])
     cash_val       = portfolio_data.get("cash_value", 0.0)
     total_value    = portfolio_data.get("total_balance", 0.0)
@@ -1475,7 +1712,7 @@ async def get_stock_detail(ticker: str):
 # ─── AI chat ──────────────────────────────────────────────────────────────────
 
 @router.post("/chat")
-async def ai_chat(request: ChatRequest):
+async def ai_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     start_time = time.time()
     try:
         user_message   = request.message.strip()
@@ -1491,6 +1728,7 @@ async def ai_chat(request: ChatRequest):
         # Fetch portfolio context with live prices
         portfolio_context = ""
         if portfolio_id:
+            check_portfolio_access(portfolio_id, current_user)
             if db is None:
                 portfolio_context = "(Note: Portfolio data unavailable — database disconnected)"
             else:

@@ -4,8 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
+from datetime import datetime, timezone
+import os
 import sys
 import logging
+import secrets
 import warnings
 
 logger = logging.getLogger(__name__)
@@ -27,9 +30,50 @@ app = FastAPI()
 
 app.include_router(routes.router, prefix="/api", tags=["api"])
 
+def _seed_admin():
+    try:
+        from database import db
+        from auth import hash_password
+        if db is None:
+            return
+        if db["users"].find_one({"role": "admin"}):
+            return
+        initial_password = secrets.token_urlsafe(16)
+        db["users"].insert_one({
+            "username":              "admin",
+            "password_hash":         hash_password(initial_password),
+            "role":                  "admin",
+            "force_password_change": True,
+            "token_version":         0,
+            "created_at":            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        })
+        print(f"\n{'='*60}")
+        print(f"  Admin account created.")
+        print(f"  Username: admin")
+        print(f"  Password: {initial_password}")
+        print(f"  Change this password on first login.")
+        print(f"{'='*60}\n")
+    except Exception as e:
+        logger.error("Admin seed failed: %s", e)
+
+
+def _ensure_indexes():
+    try:
+        from database import db
+        if db is None:
+            return
+        db["users"].create_index("username", unique=True)
+        db["portfolio_metadata"].create_index("portfolio_id", unique=True)
+        db["portfolio_metadata"].create_index("owner_username")
+    except Exception as e:
+        logger.warning("Index creation skipped (may already exist): %s", e)
+
+
 @app.on_event("startup")
 def on_startup():
     logger.info("Backend server starting up...")
+    _seed_admin()
+    _ensure_indexes()
 
 @app.on_event("shutdown")
 def on_shutdown():
@@ -46,10 +90,21 @@ def on_shutdown():
 async def status():
     return {"status": "online"}
 
+_cors_raw = os.getenv("CORS_ORIGINS", "")
+_cors_origins = (
+    [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    if _cors_raw.strip()
+    else [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    # Allow common local development origins; widen for local testing
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,6 +133,11 @@ async def serve_index():
 async def serve_dashboard():
     dashboard_path = static_dir / "dashboard.html"
     return FileResponse(str(dashboard_path))
+
+@app.get("/login", include_in_schema=False)
+async def serve_login():
+    login_path = static_dir / "login.html"
+    return FileResponse(str(login_path))
 
 if __name__ == "__main__":
     import uvicorn
