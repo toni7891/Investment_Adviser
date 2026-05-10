@@ -1,5 +1,5 @@
 // Ref: [[state.js]] [[formatters.js]] [[ui.js]] [[portfolio.js]] [[app.js]] [[PROJECT_MAP.md]]
-import { state } from "./state.js";
+import { state, authedFetch } from "./state.js";
 import { formatCurrency } from "./formatters.js";
 import { showToast, setFieldError, clearFieldErrors } from "./ui.js";
 import { loadSummary } from "./portfolio.js";
@@ -93,7 +93,7 @@ export function initPositionModal() {
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "SAVING…"; }
 
     try {
-      const response = await fetch(`/api/portfolios/${state.currentPortfolioId}/positions`, {
+      const response = await authedFetch(`/api/portfolios/${state.currentPortfolioId}/positions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker, shares, average_cost, action: state.isEditing ? "edit" : "buy" }),
@@ -190,7 +190,7 @@ export function initSellModal() {
     if (sellSubmitBtn) { sellSubmitBtn.disabled = true; sellSubmitBtn.textContent = "PROCESSING…"; }
 
     try {
-      const response = await fetch(
+      const response = await authedFetch(
         `/api/portfolios/${state.currentPortfolioId}/positions/${encodeURIComponent(state.sellTicker)}/sell`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shares, sell_price }) }
       );
@@ -260,7 +260,7 @@ export function initCashModal() {
     if (cashSubmitBtn) { cashSubmitBtn.disabled = true; cashSubmitBtn.textContent = "PROCESSING…"; }
 
     try {
-      const response = await fetch(`/api/portfolios/${state.currentPortfolioId}/cash/${operation}`, {
+      const response = await authedFetch(`/api/portfolios/${state.currentPortfolioId}/cash/${operation}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount }),
@@ -312,7 +312,7 @@ export function initRenameModal() {
     const origText = submitBtn?.textContent;
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "RENAMING…"; }
     try {
-      const resp = await fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/rename`, {
+      const resp = await authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/rename`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_name: newName }),

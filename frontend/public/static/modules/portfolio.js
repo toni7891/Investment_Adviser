@@ -1,5 +1,5 @@
 // Ref: [[state.js]] [[formatters.js]] [[ui.js]] [[chart.js]] [[modals.js]] [[app.js]] [[PROJECT_MAP.md]]
-import { state } from "./state.js";
+import { state, authedFetch } from "./state.js";
 import { formatCurrency, formatPercent, setSignedStatus } from "./formatters.js";
 import { showToast, showConfirm } from "./ui.js";
 import { loadHeartrate, loadSectors } from "./chart.js";
@@ -125,7 +125,7 @@ export function renderHoldings(data) {
 export function loadSummary() {
   if (!state.currentPortfolioId) return;
 
-  fetch(`/api/portfolios/${state.currentPortfolioId}`)
+  authedFetch(`/api/portfolios/${state.currentPortfolioId}`)
     .then((resp) => { if (!resp.ok) throw new Error(`HTTP ${resp.status}`); return resp.json(); })
     .then((data) => {
       state.lastPortfolioData = data;
@@ -181,7 +181,7 @@ export async function loadPortfolios() {
   const portfolioList = document.getElementById("portfolioList");
   if (!portfolioList) return;
   try {
-    const response = await fetch("/api/portfolios/list");
+    const response = await authedFetch("/api/portfolios/list");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data  = await response.json();
     const names = data.portfolios || [];
@@ -229,7 +229,7 @@ export async function loadPortfolios() {
         const confirmed = await showConfirm("DELETE PORTFOLIO", `Delete "${name}"? All positions will be permanently removed.`);
         if (!confirmed) return;
         try {
-          const resp = await fetch(`/api/portfolios/${encodeURIComponent(name)}`, { method: "DELETE" });
+          const resp = await authedFetch(`/api/portfolios/${encodeURIComponent(name)}`, { method: "DELETE" });
           if (resp.ok) {
             card.style.transition = "opacity 0.2s, transform 0.2s";
             card.style.opacity = "0"; card.style.transform = "scale(0.9)";
@@ -281,7 +281,7 @@ export async function loadTrades() {
   if (!bodyEl || !sectionEl) return;
 
   try {
-    const resp = await fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/trades`);
+    const resp = await authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/trades`);
     if (!resp.ok) return;
     const data   = await resp.json();
     const trades = data.trades || [];

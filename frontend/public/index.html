@@ -42,6 +42,8 @@
             <span>SYSTEM ONLINE</span>
           </div>
           <div class="hero-clock" id="sysTime"></div>
+          <button id="accountBtn" style="background:none;border:1px solid #2e4a60;border-radius:4px;color:#6b879e;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;padding:0.3rem 0.7rem;">ACCOUNT</button>
+          <button id="logoutBtn" style="background:none;border:1px solid #2e4a60;border-radius:4px;color:#6b879e;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;padding:0.3rem 0.7rem;">LOGOUT</button>
         </div>
       </header>
 
@@ -109,6 +111,47 @@
       <div class="modal-foot">
         <button id="confirmCancelBtn" class="mbtn mbtn--cancel">CANCEL</button>
         <button id="confirmOkBtn" class="mbtn mbtn--danger">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Settings Modal -->
+  <div id="accountModal" class="modal-overlay">
+    <div style="background:#0f1822;border:1px solid #1e293b;border-radius:8px;width:100%;max-width:420px;padding:2rem;font-family:'IBM Plex Mono',monospace;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <span style="font-size:0.7rem;font-weight:600;letter-spacing:0.2em;color:#f0b429;">ACCOUNT SETTINGS</span>
+        <button id="accountModalClose" style="background:none;border:none;color:#6b879e;cursor:pointer;font-size:1rem;line-height:1;">✕</button>
+      </div>
+
+      <div id="accountModalError" style="display:none;background:rgba(255,69,96,0.12);border:1px solid rgba(255,69,96,0.3);border-radius:4px;color:#f87171;font-size:0.7rem;padding:0.6rem 0.8rem;margin-bottom:1rem;"></div>
+      <div id="accountModalSuccess" style="display:none;background:rgba(0,217,126,0.1);border:1px solid rgba(0,217,126,0.3);border-radius:4px;color:#00d97e;font-size:0.7rem;padding:0.6rem 0.8rem;margin-bottom:1rem;"></div>
+
+      <!-- Change Username -->
+      <div style="margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid #1e293b;">
+        <div style="font-size:0.65rem;font-weight:600;letter-spacing:0.15em;color:#6b879e;margin-bottom:1rem;">CHANGE USERNAME</div>
+        <div style="margin-bottom:0.75rem;">
+          <label style="display:block;font-size:0.65rem;font-weight:600;letter-spacing:0.12em;color:#6b879e;margin-bottom:0.4rem;">NEW USERNAME</label>
+          <input id="newUsernameInput" type="text" spellcheck="false" autocomplete="username" style="width:100%;background:#162028;border:1px solid #1e293b;border-radius:4px;color:#d8e4ee;font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.6rem 0.75rem;outline:none;" />
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <label style="display:block;font-size:0.65rem;font-weight:600;letter-spacing:0.12em;color:#6b879e;margin-bottom:0.4rem;">CURRENT PASSWORD</label>
+          <input id="usernameConfirmPassword" type="password" autocomplete="current-password" style="width:100%;background:#162028;border:1px solid #1e293b;border-radius:4px;color:#d8e4ee;font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.6rem 0.75rem;outline:none;" />
+        </div>
+        <button id="changeUsernameBtn" style="background:#f0b429;border:none;border-radius:4px;color:#060a0f;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:600;letter-spacing:0.15em;padding:0.6rem 1rem;transition:opacity 0.15s;">UPDATE USERNAME</button>
+      </div>
+
+      <!-- Change Password -->
+      <div>
+        <div style="font-size:0.65rem;font-weight:600;letter-spacing:0.15em;color:#6b879e;margin-bottom:1rem;">CHANGE PASSWORD</div>
+        <div style="margin-bottom:0.75rem;">
+          <label style="display:block;font-size:0.65rem;font-weight:600;letter-spacing:0.12em;color:#6b879e;margin-bottom:0.4rem;">CURRENT PASSWORD</label>
+          <input id="currentPasswordInput" type="password" autocomplete="current-password" style="width:100%;background:#162028;border:1px solid #1e293b;border-radius:4px;color:#d8e4ee;font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.6rem 0.75rem;outline:none;" />
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <label style="display:block;font-size:0.65rem;font-weight:600;letter-spacing:0.12em;color:#6b879e;margin-bottom:0.4rem;">NEW PASSWORD</label>
+          <input id="newPasswordInput" type="password" autocomplete="new-password" style="width:100%;background:#162028;border:1px solid #1e293b;border-radius:4px;color:#d8e4ee;font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.6rem 0.75rem;outline:none;" />
+        </div>
+        <button id="changePasswordBtn" style="background:#f0b429;border:none;border-radius:4px;color:#060a0f;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:600;letter-spacing:0.15em;padding:0.6rem 1rem;transition:opacity 0.15s;">UPDATE PASSWORD</button>
       </div>
     </div>
   </div>

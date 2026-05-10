@@ -1,5 +1,5 @@
 // Ref: [[state.js]] [[formatters.js]] [[portfolio.js]] [[app.js]] [[PROJECT_MAP.md]]
-import { state } from "./state.js";
+import { state, authedFetch } from "./state.js";
 import { formatCurrency } from "./formatters.js";
 
 // ─── Heartrate chart ──────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ export async function loadHeartrate(period) {
       : Promise.resolve(null);
 
     const [resp, benchData] = await Promise.all([
-      fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshots?period=${period}`),
+      authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshots?period=${period}`),
       fetchBenchmark,
     ]);
 
@@ -171,7 +171,7 @@ export async function loadSectors() {
   if (!wrapEl || !canvasEl) return;
 
   try {
-    const resp = await fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/sectors`);
+    const resp = await authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/sectors`);
     if (!resp.ok) return;
     const data    = await resp.json();
     const sectors = data.sectors || [];

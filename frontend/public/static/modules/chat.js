@@ -1,5 +1,5 @@
 // Ref: [[state.js]] [[ui.js]] [[app.js]] [[routes.py]] [[PROJECT_MAP.md]]
-import { state } from "./state.js";
+import { state, authedFetch } from "./state.js";
 import { showToast } from "./ui.js";
 
 const escapeHtml = (text) => {
@@ -39,7 +39,7 @@ export async function handleSendMessage() {
   if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    const response = await fetch("/api/chat", {
+    const response = await authedFetch("/api/chat", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

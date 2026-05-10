@@ -4,7 +4,7 @@
 /* Ref: [[detail.js]] [[modals.js]] [[dashboard.html]] [[PROJECT_MAP.md]]   */
 /*****************************************************************************/
 
-import { state }                                         from "./modules/state.js";
+import { state, authedFetch, getAuthHeaders }             from "./modules/state.js";
 import { showToast, showConfirm }                        from "./modules/ui.js";
 import { loadSummary, loadPortfolios, updateStatusIndicators, exportPositions, loadTrades } from "./modules/portfolio.js";
 import { loadHeartrate, loadSectors, updateTickerTape, loadFearGreed } from "./modules/chart.js";
@@ -16,6 +16,16 @@ import {
   openCashModal,     closeCashModal,     initCashModal,
   openRenameModal,   closeRenameModal,   initRenameModal,
 } from "./modules/modals.js";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+{
+  const _token = localStorage.getItem("authToken");
+  if (!_token && !window.location.pathname.startsWith("/login")) {
+    window.location.replace("/login");
+  }
+  state.authToken  = _token;
+  state.currentUser = JSON.parse(localStorage.getItem("currentUser") || "null");
+}
 
 // ─── Upload helpers ───────────────────────────────────────────────────────────
 function setUploadLoading(isLoading) {
@@ -37,7 +47,7 @@ async function uploadPortfolioFile(file) {
   try {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/portfolios/upload", { method: "POST", body: formData });
+    const response = await authedFetch("/api/portfolios/upload", { method: "POST", body: formData });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Upload failed");
     showToast(`Uploaded "${data.portfolio_name || "portfolio"}" successfully.`, "success");
@@ -162,7 +172,7 @@ if (isDashboard) {
       try {
         const fd = new FormData();
         fd.append("file", file);
-        const resp = await fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshots/import`, { method: "POST", body: fd });
+        const resp = await authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshots/import`, { method: "POST", body: fd });
         const result = await resp.json();
         if (!resp.ok) throw new Error(result.detail || "Import failed");
         showToast(`Imported ${result.inserted} snapshot(s)`, "success");
@@ -180,7 +190,7 @@ if (isDashboard) {
       const origText = takeSnapshotBtn.textContent;
       takeSnapshotBtn.disabled = true; takeSnapshotBtn.textContent = "SAVING…";
       try {
-        const resp   = await fetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshot`, { method: "POST" });
+        const resp   = await authedFetch(`/api/portfolios/${encodeURIComponent(state.currentPortfolioId)}/snapshot`, { method: "POST" });
         const result = await resp.json();
         if (!resp.ok) throw new Error(result.detail || "Snapshot failed");
         showToast(`Snapshot saved (slot: ${result.snapshot?.slot || "─"})`, "success");
@@ -230,6 +240,117 @@ if (isDashboard) {
     setInterval(loadFearGreed, 60 * 60 * 1000);
   }
 }
+
+// ─── Logout ───────────────────────────────────────────────────────────────────
+document.getElementById("logoutBtn")?.addEventListener("click", () => {
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("currentUser");
+  localStorage.removeItem("currentPortfolioId");
+  window.location.replace("/login");
+});
+
+// ─── Account Settings Modal ───────────────────────────────────────────────────
+(function () {
+  const modal          = document.getElementById("accountModal");
+  const openBtn        = document.getElementById("accountBtn");
+  const closeBtn       = document.getElementById("accountModalClose");
+  const errorBox       = document.getElementById("accountModalError");
+  const successBox     = document.getElementById("accountModalSuccess");
+  const newUsernameEl  = document.getElementById("newUsernameInput");
+  const userPassEl     = document.getElementById("usernameConfirmPassword");
+  const curPassEl      = document.getElementById("currentPasswordInput");
+  const newPassEl      = document.getElementById("newPasswordInput");
+  const changeUserBtn  = document.getElementById("changeUsernameBtn");
+  const changePassBtn  = document.getElementById("changePasswordBtn");
+
+  if (!modal) return;
+
+  function showModal() {
+    modal.classList.add("active");
+    if (newUsernameEl) newUsernameEl.value = "";
+    if (userPassEl)    userPassEl.value    = "";
+    if (curPassEl)     curPassEl.value     = "";
+    if (newPassEl)     newPassEl.value     = "";
+    hideMessages();
+  }
+
+  function hideModal() { modal.classList.remove("active"); }
+
+  function showError(msg) {
+    if (!errorBox) return;
+    errorBox.textContent = msg;
+    errorBox.style.display = "block";
+    if (successBox) successBox.style.display = "none";
+  }
+
+  function showSuccess(msg) {
+    if (!successBox) return;
+    successBox.textContent = msg;
+    successBox.style.display = "block";
+    if (errorBox) errorBox.style.display = "none";
+  }
+
+  function hideMessages() {
+    if (errorBox)   errorBox.style.display   = "none";
+    if (successBox) successBox.style.display = "none";
+  }
+
+  openBtn?.addEventListener("click", showModal);
+  closeBtn?.addEventListener("click", hideModal);
+  modal.addEventListener("click", (e) => { if (e.target === modal) hideModal(); });
+
+  changeUserBtn?.addEventListener("click", async () => {
+    hideMessages();
+    const newUsername = newUsernameEl?.value.trim();
+    const password    = userPassEl?.value;
+    if (!newUsername) { showError("New username is required."); return; }
+    if (!password)    { showError("Current password is required."); return; }
+
+    changeUserBtn.disabled    = true;
+    changeUserBtn.textContent = "UPDATING…";
+    try {
+      const resp = await authedFetch("/api/auth/change-username", {
+        method: "PATCH",
+        body:   JSON.stringify({ new_username: newUsername, current_password: password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { showError(data.detail || "Failed to update username."); return; }
+      localStorage.setItem("authToken",   data.access_token);
+      localStorage.setItem("currentUser", JSON.stringify({ username: data.username, role: state.currentUser?.role || "user" }));
+      state.authToken   = data.access_token;
+      state.currentUser = { username: data.username, role: state.currentUser?.role || "user" };
+      showSuccess(`Username updated to "${data.username}". Re-logging in…`);
+      setTimeout(() => { window.location.reload(); }, 1200);
+    } catch { showError("Network error."); }
+    finally { changeUserBtn.disabled = false; changeUserBtn.textContent = "UPDATE USERNAME"; }
+  });
+
+  changePassBtn?.addEventListener("click", async () => {
+    hideMessages();
+    const currentPass = curPassEl?.value;
+    const newPass     = newPassEl?.value;
+    if (!currentPass) { showError("Current password is required."); return; }
+    if (!newPass)     { showError("New password is required."); return; }
+    if (newPass.length < 6) { showError("Password must be at least 6 characters."); return; }
+
+    changePassBtn.disabled    = true;
+    changePassBtn.textContent = "UPDATING…";
+    try {
+      const resp = await authedFetch("/api/auth/change-password", {
+        method: "PATCH",
+        body:   JSON.stringify({ current_password: currentPass, new_password: newPass }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { showError(data.detail || "Failed to update password."); return; }
+      localStorage.setItem("authToken", data.access_token);
+      state.authToken = data.access_token;
+      showSuccess("Password updated successfully.");
+      if (curPassEl) curPassEl.value = "";
+      if (newPassEl) newPassEl.value = "";
+    } catch { showError("Network error."); }
+    finally { changePassBtn.disabled = false; changePassBtn.textContent = "UPDATE PASSWORD"; }
+  });
+})();
 
 // ─── Landing-only: file upload ────────────────────────────────────────────────
 if (isLanding) {
