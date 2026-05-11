@@ -370,15 +370,13 @@ async def call_ai_backend(user_message: str) -> dict:
 
         def _invoke_bedrock():
             client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
-            body = _json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 2048,
-                "system": AI_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": user_message}],
-            })
-            response = client.invoke_model(modelId=BEDROCK_MODEL, body=body)
-            result = _json.loads(response["body"].read())
-            return result["content"][0]["text"]
+            response = client.converse(
+                modelId=BEDROCK_MODEL,
+                system=[{"text": AI_SYSTEM_PROMPT}],
+                messages=[{"role": "user", "content": [{"text": user_message}]}],
+                inferenceConfig={"maxTokens": 2048},
+            )
+            return response["output"]["message"]["content"][0]["text"]
 
         logger.info("Calling AWS Bedrock model %s in %s", BEDROCK_MODEL, BEDROCK_REGION)
         try:
