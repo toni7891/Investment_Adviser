@@ -366,14 +366,14 @@ Keep responses concise, informative, and focused on the user's specific question
 async def call_ai_backend(user_message: str) -> dict:
     # ── AWS Bedrock branch ────────────────────────────────────────────────────
     if LLM_BACKEND == "bedrock":
-        import boto3, json as _json
+        import boto3
 
         def _invoke_bedrock():
             client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+            full_message = f"{AI_SYSTEM_PROMPT}\n\n{user_message}"
             response = client.converse(
                 modelId=BEDROCK_MODEL,
-                system=[{"text": AI_SYSTEM_PROMPT}],
-                messages=[{"role": "user", "content": [{"text": user_message}]}],
+                messages=[{"role": "user", "content": [{"text": full_message}]}],
                 inferenceConfig={"maxTokens": 2048},
             )
             return response["output"]["message"]["content"][0]["text"]
