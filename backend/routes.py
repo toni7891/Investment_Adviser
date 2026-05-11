@@ -10,7 +10,7 @@ from datetime import datetime, date as _date, timedelta, timezone
 import pandas as pd
 import yfinance as yf
 import re
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 try:
     import pytz as _pytz
 except ImportError:
@@ -65,7 +65,7 @@ class CashRequest(BaseModel):
     amount: float
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=4000)
     portfolio_id: str = ""
     use_web_search: bool = True
 
@@ -561,6 +561,10 @@ _TAPE_TTL   = 300   # 5 minutes
 _FNG_CACHE: dict = {"data": None, "ts": 0.0}
 _FNG_TTL    = 3600  # 1 hour
 
+_CHAT_RATE: dict = {}   # username -> [timestamp, ...]
+_CHAT_RATE_WINDOW = 60  # seconds
+_CHAT_RATE_MAX    = 10  # requests per window per user
+
 # ─── Auth routes ──────────────────────────────────────────────────────────────
 
 @router.post("/auth/signup")
@@ -571,8 +575,8 @@ async def signup(request: SignupRequest):
     username = request.username.strip()
     if not re.match(r'^[a-zA-Z0-9_]{3,40}$', username):
         raise HTTPException(status_code=400, detail="Username must be 3–40 characters: letters, digits, underscores only")
-    if len(request.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     if db["users"].find_one({"username": username}):
         raise HTTPException(status_code=409, detail="Username already taken")
@@ -626,8 +630,8 @@ class ChangePasswordRequest(BaseModel):
 async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user_allow_force_change)):
     if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    if len(request.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     user_doc = db["users"].find_one({"username": current_user["username"]})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
@@ -713,11 +717,6 @@ async def admin_list_all_portfolios(_admin: dict = Depends(get_current_admin)):
 
 # ─── Portfolio routes ──────────────────────────────────────────────────────────
 
-@router.get("/portfolios")
-@router.get("/portfolios/")
-async def get_default_portfolio():
-    return await get_portfolio("4RCH3R")
-
 # @router.get("/portfolios/list")
 # async def list_portfolio_names():
 #     if db is None:
@@ -755,6 +754,8 @@ async def upload_portfolio(file: UploadFile = File(...), current_user: dict = De
         raise HTTPException(status_code=503, detail="Database unavailable — cannot upload portfolio")
     try:
         upload_bytes = await file.read()
+        if len(upload_bytes) > 5 * 1024 * 1024:  # 5 MB
+            raise HTTPException(status_code=413, detail="File too large (max 5 MB)")
         portfolio_name, cash_value, stock_documents = _parse_portfolio_upload(upload_bytes)
         collection_name    = _safe_collection_name(portfolio_name)
         if collection_name in db.list_collection_names():
@@ -1701,6 +1702,16 @@ async def get_stock_detail(ticker: str):
 
 @router.post("/chat")
 async def ai_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
+    # Rate limit: max 10 requests per 60 seconds per user
+    username = current_user["username"]
+    now = time.time()
+    timestamps = _CHAT_RATE.get(username, [])
+    timestamps = [t for t in timestamps if now - t < _CHAT_RATE_WINDOW]
+    if len(timestamps) >= _CHAT_RATE_MAX:
+        raise HTTPException(status_code=429, detail=f"Rate limit exceeded — max {_CHAT_RATE_MAX} chat requests per minute")
+    timestamps.append(now)
+    _CHAT_RATE[username] = timestamps
+
     start_time = time.time()
     try:
         user_message   = request.message.strip()
@@ -1721,7 +1732,7 @@ async def ai_chat(request: ChatRequest, current_user: dict = Depends(get_current
                 portfolio_context = "(Note: Portfolio data unavailable — database disconnected)"
             else:
                 try:
-                    portfolio_data    = await get_portfolio(portfolio_id)
+                    portfolio_data    = await get_portfolio(portfolio_id, current_user)
                     portfolio_context = _format_portfolio_summary(portfolio_id, portfolio_data)
                 except HTTPException:
                     portfolio_context = f"(Note: Portfolio '{portfolio_id}' not found)"
