@@ -86,9 +86,30 @@ def _ensure_indexes():
         logger.warning("Index creation skipped (may already exist): %s", e)
 
 
+def _setup_cloudwatch_logging():
+    log_group = os.getenv("CLOUDWATCH_LOG_GROUP")
+    if not log_group:
+        return
+    try:
+        import watchtower
+        import boto3 as _boto3
+        cw_client = _boto3.client("logs", region_name=os.getenv("BEDROCK_REGION", "us-east-1"))
+        handler = watchtower.CloudWatchLogHandler(
+            log_group=log_group,
+            stream_name="fastapi",
+            boto3_client=cw_client,
+        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        logging.getLogger().addHandler(handler)
+        logger.info("CloudWatch logging enabled → %s", log_group)
+    except Exception as e:
+        logger.warning("CloudWatch logging setup failed: %s", e)
+
+
 @app.on_event("startup")
 def on_startup():
     logger.info("Backend server starting up...")
+    _setup_cloudwatch_logging()
     _seed_admin()
     _ensure_indexes()
 

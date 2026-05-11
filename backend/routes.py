@@ -326,6 +326,13 @@ BEDROCK_MODEL     = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-haiku-20241
 BEDROCK_REGION    = os.getenv("BEDROCK_REGION", "us-east-1")
 SSL_VERIFY        = os.getenv("SSL_VERIFY", "true").lower() != "false"
 
+# ─── SES alert configuration ──────────────────────────────────────────────────
+
+ALERT_ENABLED       = os.getenv("ALERT_ENABLED", "false").lower() == "true"
+ALERT_EMAIL         = os.getenv("ALERT_EMAIL", "")
+ALERT_THRESHOLD_PCT = float(os.getenv("ALERT_THRESHOLD_PCT", "5.0"))
+_ALERT_SENT: dict   = {}  # portfolio_id → "YYYY-MM-DD" (one alert per portfolio per day)
+
 if LLM_BACKEND == "ollama":
     AI_API_URL      = OLLAMA_API_URL
     AI_MODEL        = OLLAMA_MODEL
@@ -513,6 +520,36 @@ def _snapshot_doc(portfolio_id: str, total_balance: float, invested_value: float
         "cash_value":     round(cash_value, 2),
         "timestamp":      datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+def _maybe_send_alert(portfolio_id: str, daily_change_pct: float):
+    """Send an SES email when daily portfolio change exceeds the configured threshold."""
+    if not ALERT_ENABLED or not ALERT_EMAIL:
+        return
+    if abs(daily_change_pct) < ALERT_THRESHOLD_PCT:
+        return
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _ALERT_SENT.get(portfolio_id) == today:
+        return
+    try:
+        import boto3 as _boto3
+        ses = _boto3.client("ses", region_name=BEDROCK_REGION)
+        direction = "up" if daily_change_pct > 0 else "down"
+        ses.send_email(
+            Source=ALERT_EMAIL,
+            Destination={"ToAddresses": [ALERT_EMAIL]},
+            Message={
+                "Subject": {"Data": f"[4RCH3R] Portfolio alert: {portfolio_id}"},
+                "Body": {"Text": {"Data": (
+                    f"Portfolio '{portfolio_id}' is {direction} {abs(daily_change_pct):.2f}% today "
+                    f"(threshold: {ALERT_THRESHOLD_PCT}%).\n\nhttps://tonyverin.dev/app"
+                )}},
+            },
+        )
+        _ALERT_SENT[portfolio_id] = today
+        logger.info("SES alert sent for %s (%.2f%%)", portfolio_id, daily_change_pct)
+    except Exception as e:
+        logger.warning("SES alert failed: %s", e)
+
 
 def _maybe_record_snapshot(portfolio_id: str, total_balance: float, invested_value: float, cash_value: float):
     """Insert a snapshot for the current slot only if one doesn't already exist."""
@@ -922,6 +959,7 @@ async def get_portfolio(portfolio_id: str, current_user: dict = Depends(get_curr
         daily_change_pct  = ((combined_current - combined_prev) / combined_prev * 100) if combined_prev > 0 else 0
 
         _maybe_record_snapshot(portfolio_id, combined_current, invested_val, cash_val)
+        _maybe_send_alert(portfolio_id, daily_change_pct)
 
         return {
             "invested_value":   float(round(invested_val, 2)),

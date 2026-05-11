@@ -961,3 +961,230 @@ load_secrets_from_ssm()
 | 4 | Lambda + EventBridge | Fix the missing-snapshot problem for days you don't log in |
 | 5 | S3 | Nice-to-have audit trail for uploads |
 | 6 | SNS | Add after SES is working, reuses the same alert logic |
+
+---
+
+## Step 16 — CloudWatch Logs (Python handler)
+
+Ships FastAPI log records directly to CloudWatch via the `watchtower` library. No CloudWatch agent required — works through the same IAM Role already attached to EC2.
+
+**What you get:** Every `logger.info/warning/error` call in the app appears in CloudWatch Logs → Log Groups → `/investment-manager/app` → `fastapi` stream. Browse errors from the AWS console without SSH.
+
+### 16a — IAM Role: add Logs permissions
+
+Go to **IAM → Roles → `investment-manager-ec2` → Add permissions → Attach policies**.
+Search for and attach **`CloudWatchLogsFullAccess`**.
+
+Or add this inline policy for minimal scope:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+    "Resource": "arn:aws:logs:us-east-1:*:log-group:/investment-manager/*"
+  }]
+}
+```
+
+### 16b — SSM Parameter
+
+Go to **Systems Manager → Parameter Store → Create Parameter**:
+
+| Field | Value |
+|-------|-------|
+| Name | `/investment-manager/CLOUDWATCH_LOG_GROUP` |
+| Type | String |
+| Value | `/investment-manager/app` |
+
+### 16c — Install watchtower and restart
+
+```bash
+source /home/ubuntu/investment_manager/venv/bin/activate
+pip install "watchtower>=3.0.0"
+sudo systemctl restart investment-manager
+```
+
+### 16d — Verify
+
+1. AWS Console → **CloudWatch → Log Groups** → look for `/investment-manager/app`
+2. Click it → click the `fastapi` stream → you should see startup log lines
+3. Make a chat request or load a portfolio — new log entries appear within seconds
+
+### 16e — Optional: Uptime alarm
+
+1. AWS Console → **CloudWatch → Alarms → Create Alarm**
+2. Metric: **EC2 → Per-Instance Metrics → StatusCheckFailed**
+3. Threshold: `>= 1` for 1 data point
+4. Action: **Send notification to SNS topic** → create a topic → subscribe your email
+5. You'll get an email if the instance goes down
+
+---
+
+## Step 17 — SES Portfolio Alerts
+
+Sends an email when a portfolio's daily change exceeds a configurable percentage threshold. Fires at most once per portfolio per day (cooldown enforced in memory). Works via the same IAM Role — no API key needed.
+
+**What you get:** An email like `[4RCH3R] Portfolio alert: MyPortfolio — up 6.41% today (threshold: 5.0%)` when the market moves sharply.
+
+### 17a — Verify your email in SES
+
+1. AWS Console → **SES → Verified Identities → Create Identity**
+2. Select **Email address** → enter `toni7891@gmail.com`
+3. Click **Create Identity** → check your inbox → click the confirmation link
+
+> **Note:** New SES accounts are in **sandbox mode** — you can only send to verified addresses. For a personal app (sending to yourself) this is fine as-is. To send to anyone, go to **SES → Account dashboard → Request production access**.
+
+### 17b — IAM Role: add SES permission
+
+Go to **IAM → Roles → `investment-manager-ec2` → Add permissions → Create inline policy**:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+    "Resource": "*"
+  }]
+}
+```
+
+### 17c — SSM Parameters
+
+Add three new parameters in **Systems Manager → Parameter Store**:
+
+| Name | Type | Value |
+|------|------|-------|
+| `/investment-manager/ALERT_ENABLED` | String | `true` |
+| `/investment-manager/ALERT_EMAIL` | String | `toni7891@gmail.com` |
+| `/investment-manager/ALERT_THRESHOLD_PCT` | String | `5.0` |
+
+`ALERT_THRESHOLD_PCT` is the absolute daily change % that triggers the alert (e.g. `5.0` fires on ±5% days). Lower it to `1.0` for more sensitive alerts.
+
+### 17d — Restart to pick up new parameters
+
+```bash
+sudo systemctl restart investment-manager
+```
+
+The app reads SSM parameters at startup, so new parameters take effect after a restart.
+
+### 17e — Test
+
+To trigger a test alert without waiting for a big market move:
+
+1. Temporarily set `/investment-manager/ALERT_THRESHOLD_PCT` to `0.01` in SSM
+2. Restart the app
+3. Open the dashboard and load any portfolio — the GET request fires the alert check
+4. Check your inbox within ~30 seconds
+5. Set the threshold back to your real value and restart again
+
+```bash
+# Confirm the alert fired in app logs:
+sudo journalctl -u investment-manager -n 30 | grep -i "ses\|alert"
+```
+
+---
+
+## Step 18 — Lambda + EventBridge: Automatic Daily Snapshots
+
+**Problem it solves:** Snapshots only record when someone visits the dashboard. If you don't open the app on a given day, that day's closing value is missing from your chart history.
+
+**Solution:** A Lambda function fires every weekday at 4 pm ET via EventBridge, calls the app's internal snapshot endpoint for every portfolio, and records the market-close value automatically — whether or not anyone logged in.
+
+### 18a — New internal endpoint (code change)
+
+Add a new route to `backend/routes.py` — `POST /api/internal/daily-close` — protected by a shared secret (`X-Internal-Key` header) rather than JWT, so Lambda can call it without a user session. The endpoint:
+1. Lists all portfolios in the DB
+2. Calls `get_portfolio()` for each one (fetches live prices + records a snapshot)
+3. Sends the daily summary email via SES (see Step 19)
+
+Add these env vars via SSM:
+
+| SSM Parameter | Type | Value |
+|---|---|---|
+| `/investment-manager/INTERNAL_API_KEY` | SecureString | any random 32-char string (`openssl rand -hex 16`) |
+
+### 18b — Lambda function
+
+1. AWS Console → **Lambda → Create Function**
+   - Name: `investment-manager-daily-close`
+   - Runtime: Python 3.12
+   - Architecture: x86_64
+
+2. Paste this function code:
+```python
+import urllib.request, os, json
+
+def handler(event, context):
+    url = os.environ["APP_URL"] + "/api/internal/daily-close"
+    key = os.environ["INTERNAL_API_KEY"]
+    req = urllib.request.Request(
+        url, method="POST",
+        headers={"X-Internal-Key": key, "Content-Length": "0"},
+    )
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = json.loads(r.read())
+    print(f"Snapshotted {body['snapshotted']} portfolios")
+    return {"statusCode": 200, "body": body}
+```
+
+3. Add environment variables to the Lambda config:
+   - `APP_URL` = `https://tonyverin.dev`
+   - `INTERNAL_API_KEY` = the same value you put in SSM
+
+4. Set **Timeout** to `60` seconds (Configuration → General configuration)
+
+### 18c — EventBridge schedule
+
+1. AWS Console → **EventBridge → Rules → Create Rule**
+   - Name: `investment-manager-market-close`
+   - Rule type: **Schedule**
+   - Schedule: `cron(0 21 ? * MON-FRI *)` — 9 pm UTC = 4 pm ET (adjust +1h during DST: `cron(0 20 ? * MON-FRI *)`)
+2. Target: select your `investment-manager-daily-close` Lambda
+3. Click **Create**
+
+### 18d — Verify
+
+Check Lambda execution logs after the first scheduled run:
+- AWS Console → **Lambda → investment-manager-daily-close → Monitor → View CloudWatch logs**
+- Or trigger it manually: **Test → Create test event → { } → Test**
+
+---
+
+## Step 19 — SES Daily Portfolio Summary Email
+
+**What you get:** An email every weekday at market close listing every portfolio's current value and daily change — like a one-glance end-of-day report.
+
+Example email:
+```
+Subject: [4RCH3R] Daily Summary — 2026-05-11
+
+Daily Portfolio Summary
+==============================
+
+  MyPortfolio:   $24,310.50 (+1.83%)
+  Crypto:        $8,140.00  (-0.42%)
+
+https://tonyverin.dev/app
+```
+
+### 19a — How it works
+
+The daily summary is sent by the same `POST /api/internal/daily-close` endpoint from Step 18, at the end of the snapshot loop. It reuses the existing SES setup (Step 17) and the same `ALERT_EMAIL` SSM parameter — no extra AWS configuration needed beyond Step 17 and 18.
+
+**Prerequisite:** Steps 17 (SES verified identity + IAM) and 18 (Lambda + endpoint) must be complete first.
+
+### 19b — SSM parameters needed (already set in Step 17)
+
+| Parameter | Purpose |
+|---|---|
+| `ALERT_ENABLED` = `true` | Gates both threshold alerts and the daily summary |
+| `ALERT_EMAIL` = `toni7891@gmail.com` | Where the summary is sent |
+
+No new parameters required — the summary email is automatically included in the Step 18 endpoint once `ALERT_ENABLED` is `true`.
+
+### 19c — Disable threshold alerts but keep daily summary (optional)
+
+If you want the daily summary but find the real-time threshold alerts (Step 17) noisy, set `ALERT_THRESHOLD_PCT` to `100.0` in SSM — it will never trigger on normal market moves, but the daily summary at close still sends.
