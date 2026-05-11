@@ -89,7 +89,7 @@ if (isDashboard) {
   // Init state from storage
   state.currentPortfolioId = localStorage.getItem("currentPortfolioId") || null;
   if (!state.currentPortfolioId) {
-    window.location.href = "/";
+    window.location.href = "/app";
   } else {
     // Init portfolio title
     const portfolioTitle = document.getElementById("portfolioTitle");

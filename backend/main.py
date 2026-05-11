@@ -142,9 +142,12 @@ app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="st
 
 
 @app.get("/", include_in_schema=False)
+async def serve_landing():
+    return FileResponse(str(static_dir / "landing.html"))
+
+@app.get("/app", include_in_schema=False)
 async def serve_index():
-    index_path = static_dir / "index.html"
-    return FileResponse(str(index_path))
+    return FileResponse(str(static_dir / "index.html"))
 
 @app.get("/dashboard", include_in_schema=False)
 async def serve_dashboard():

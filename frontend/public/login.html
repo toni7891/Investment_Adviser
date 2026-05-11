@@ -224,7 +224,7 @@
 
     // If already logged in, skip to home
     if (localStorage.getItem("authToken")) {
-      window.location.replace("/");
+      window.location.replace("/app");
     }
 
     function showError(msg) {
@@ -337,7 +337,7 @@
     function finishLogin() {
       localStorage.setItem("authToken",    pendingToken);
       localStorage.setItem("currentUser",  JSON.stringify(pendingUser));
-      window.location.replace("/");
+      window.location.replace("/app");
     }
   </script>
 </body>
