@@ -212,113 +212,154 @@
       text-align: center; font-size: 0.65rem; letter-spacing: 0.2em;
       color: var(--amber); margin-bottom: 1.5rem;
     }
-
     .mockup-wrap {
-      max-width: 1100px; margin: 0 auto;
-      background: var(--panel);
-      border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(240,180,41,0.05), inset 0 1px 0 rgba(255,255,255,0.05);
+      max-width: 1200px; margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 60px 120px rgba(0,0,0,0.7), 0 0 0 1px rgba(240,180,41,0.06);
     }
-
-    /* mock top bar */
+    /* browser chrome */
     .mock-bar {
-      background: rgba(6,10,15,0.8);
-      border-bottom: 1px solid var(--border);
-      padding: 0.65rem 1rem;
-      display: flex; align-items: center; gap: 0.5rem;
+      background: #060a0f; border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem;
     }
     .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
     .mock-dot.red { background: #ff5f57; }
     .mock-dot.yellow { background: #febc2e; }
     .mock-dot.green { background: #28c840; }
-    .mock-url {
-      flex: 1; text-align: center;
-      font-size: 0.6rem; color: var(--dim);
-      letter-spacing: 0.05em;
-    }
+    .mock-url { flex: 1; text-align: center; font-size: 0.6rem; color: var(--xd); letter-spacing: 0.05em; }
 
-    /* mock dashboard grid */
-    .mock-body {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      grid-template-rows: auto auto;
-      gap: 1px;
-      background: var(--border);
+    /* ── DASHBOARD HEADER ── */
+    .db-header {
+      background: var(--panel); border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.2rem;
+      display: flex; align-items: center; gap: 1.5rem;
     }
+    .db-logo { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.15em; color: var(--amber); white-space: nowrap; }
+    .db-vals { display: flex; gap: 1.5rem; flex: 1; }
+    .db-val-item { font-size: 0.6rem; }
+    .db-val-lbl { color: var(--xd); letter-spacing: 0.08em; display: block; margin-bottom: 1px; }
+    .db-val-num { color: var(--text); font-weight: 500; }
+    .db-val-total { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .db-actions { display: flex; gap: 0.3rem; }
+    .db-btn {
+      font-size: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 3px;
+      background: var(--surface); border: 1px solid var(--border); color: var(--dim);
+      white-space: nowrap;
+    }
+    .db-btn.primary { background: rgba(240,180,41,0.1); border-color: rgba(240,180,41,0.3); color: var(--amber); }
 
-    /* stat cards row */
-    .mock-stat {
-      background: var(--panel);
-      padding: 0.9rem 1rem;
+    /* ── STATS ROW ── */
+    .db-stats {
+      background: var(--void); border-bottom: 1px solid var(--border);
+      padding: 0.5rem 1.2rem; display: flex; align-items: center; gap: 2rem;
     }
-    .mock-stat-lbl { font-size: 0.55rem; letter-spacing: 0.12em; color: var(--dim); margin-bottom: 0.3rem; }
-    .mock-stat-val { font-size: 1rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-    .mock-stat-sub { font-size: 0.6rem; margin-top: 0.2rem; }
-    .up { color: var(--gain); }
-    .dn { color: var(--loss); }
+    .db-stat-item { font-size: 0.6rem; }
+    .db-stat-lbl { color: var(--xd); letter-spacing: 0.06em; font-size: 0.5rem; }
+    .db-stat-val { font-weight: 600; }
+    .db-fng {
+      margin-left: auto; display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.55rem; color: var(--dim);
+    }
+    .db-fng-score { font-size: 1rem; font-weight: 600; color: var(--loss); }
+    .db-pills { display: flex; gap: 0.25rem; }
+    .db-pill {
+      font-size: 0.5rem; padding: 0.15rem 0.4rem; border-radius: 2px;
+      border: 1px solid var(--border); color: var(--xd);
+    }
+    .db-pill.active { border-color: var(--amber); color: var(--amber); }
 
-    /* chart + holdings */
-    .mock-chart-wrap {
-      grid-column: 1 / 4;
-      background: var(--panel);
-      padding: 1rem;
-      border-top: 1px solid var(--border);
+    /* ── MAIN LAYOUT ── */
+    .db-main { display: flex; }
+    .db-left { flex: 1; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .db-right { width: 240px; display: flex; flex-direction: column; }
+
+    /* chart area */
+    .db-chart-area { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+    .db-chart-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+    .db-chart-title { font-size: 0.55rem; letter-spacing: 0.1em; color: var(--xd); }
+    .db-svg { width: 100%; height: 140px; }
+
+    /* holdings table */
+    .db-table { flex: 1; overflow: hidden; }
+    .db-table-hdr {
+      display: grid; grid-template-columns: 52px 40px 58px 62px 56px 46px 54px 58px 60px auto;
+      padding: 0.35rem 1rem; background: var(--void); border-bottom: 1px solid var(--border);
+      font-size: 0.48rem; letter-spacing: 0.08em; color: var(--xd);
     }
-    .mock-chart-hdr {
+    .db-table-body { }
+    .db-tr {
+      display: grid; grid-template-columns: 52px 40px 58px 62px 56px 46px 54px 58px 60px auto;
+      padding: 0.3rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 0.55rem; align-items: center;
+      transition: background 0.4s;
+    }
+    .db-tr:hover { background: rgba(255,255,255,0.02); }
+    .db-tr.flash { animation: rowflash 1s ease; }
+    @keyframes rowflash { 0%,100%{background:transparent} 50%{background:rgba(0,217,126,0.06)} }
+    .db-td { color: var(--dim); white-space: nowrap; overflow: hidden; }
+    .db-td.ticker { color: var(--amber); font-weight: 600; letter-spacing: 0.05em; }
+    .db-td.gain { color: var(--gain); font-weight: 500; }
+    .db-td.loss { color: var(--loss); font-weight: 500; }
+    .db-td.num { color: var(--text); }
+    .db-td-ops { display: flex; gap: 0.25rem; }
+    .db-op { font-size: 0.45rem; padding: 0.15rem 0.35rem; border-radius: 2px; border: 1px solid var(--border); color: var(--dim); }
+
+    /* AI chat panel */
+    .db-chat-hdr {
+      padding: 0.5rem 0.75rem; background: var(--void); border-bottom: 1px solid var(--border);
+      font-size: 0.55rem; letter-spacing: 0.1em; color: var(--xd);
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 0.75rem;
     }
-    .mock-chart-title { font-size: 0.65rem; letter-spacing: 0.1em; color: var(--dim); }
-    .mock-pills { display: flex; gap: 0.3rem; }
-    .mock-pill {
-      font-size: 0.55rem; padding: 0.2rem 0.5rem; border-radius: 3px;
-      border: 1px solid var(--border); color: var(--dim); cursor: default;
+    .db-chat-live { color: var(--gain); font-size: 0.48rem; }
+    .db-chat-msgs { flex: 1; padding: 0.6rem 0.6rem; overflow: hidden; display: flex; flex-direction: column; gap: 0.5rem; }
+    .db-msg { font-size: 0.55rem; line-height: 1.5; padding: 0.4rem 0.5rem; border-radius: 4px; }
+    .db-msg.user { background: rgba(240,180,41,0.08); border: 1px solid rgba(240,180,41,0.12); color: var(--amber); align-self: flex-end; max-width: 85%; }
+    .db-msg.ai { background: var(--surface); border: 1px solid var(--border); color: var(--text); max-width: 95%; }
+    .db-msg.ai .ai-typing { display: inline-flex; gap: 3px; align-items: center; }
+    .db-msg.ai .ai-typing span { width: 4px; height: 4px; border-radius: 50%; background: var(--dim); animation: aidot 1.2s ease-in-out infinite; }
+    .db-msg.ai .ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+    .db-msg.ai .ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes aidot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+    .db-chat-input {
+      padding: 0.5rem 0.6rem; border-top: 1px solid var(--border);
+      display: flex; gap: 0.4rem;
     }
-    .mock-pill.active { border-color: var(--amber); color: var(--amber); }
+    .db-input-field {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 3px; font-size: 0.5rem; color: var(--dim); padding: 0.3rem 0.5rem;
+      font-family: var(--mono);
+    }
+    .db-send { font-size: 0.5rem; padding: 0.3rem 0.6rem; border-radius: 3px; background: var(--amber); color: #000; border: none; font-weight: 600; }
 
-    /* SVG chart */
-    .mock-svg { width: 100%; height: 160px; }
+    /* bottom sections */
+    .db-bottom { border-top: 1px solid var(--border); display: flex; }
+    .db-section { flex: 1; padding: 0.6rem 1rem; border-right: 1px solid var(--border); }
+    .db-section:last-child { border-right: none; }
+    .db-section-title { font-size: 0.5rem; letter-spacing: 0.12em; color: var(--xd); margin-bottom: 0.5rem; }
+    .db-alloc-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; gap: 1px; margin-bottom: 0.4rem; }
+    .db-alloc-seg { height: 100%; border-radius: 2px; }
+    .db-alloc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; }
+    .db-alloc-item { font-size: 0.48rem; color: var(--dim); display: flex; align-items: center; gap: 0.3rem; }
+    .db-alloc-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .db-trade-row { display: flex; justify-content: space-between; font-size: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--dim); }
+    .db-trade-row .ticker { color: var(--amber); }
+    .db-trade-row .gain { color: var(--gain); }
 
-    /* holdings */
-    .mock-holdings {
-      grid-column: 4;
-      background: var(--panel);
-      padding: 1rem;
-      border-top: 1px solid var(--border);
-      border-left: 1px solid var(--border);
-    }
-    .mock-holdings-title { font-size: 0.6rem; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 0.75rem; }
-    .mock-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
-      font-size: 0.6rem;
-    }
-    .mock-row:last-child { border-bottom: none; }
-    .mock-ticker { color: var(--amber); font-weight: 600; letter-spacing: 0.08em; min-width: 42px; }
-    .mock-shares { color: var(--dim); flex: 1; padding: 0 0.5rem; }
-    .mock-pnl { font-weight: 500; }
+    /* live pulse dot */
+    .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gain); animation: pulse 2s ease-in-out infinite; margin-right: 4px; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.6)} }
 
-    /* chat strip */
-    .mock-chat {
-      grid-column: 1 / 5;
-      background: rgba(6,10,15,0.5);
-      padding: 0.7rem 1rem;
-      border-top: 1px solid var(--border);
-      display: flex; align-items: center; gap: 0.75rem;
-    }
-    .mock-chat-badge { font-size: 0.55rem; color: var(--amber); letter-spacing: 0.1em; white-space: nowrap; }
-    .mock-chat-msg { font-size: 0.6rem; color: var(--dim); flex: 1; font-style: italic; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .mock-chat-gain { font-size: 0.6rem; color: var(--gain); white-space: nowrap; }
-
-    /* shimmer on mockup */
+    /* shimmer */
     .mockup-glow {
       position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
-      width: 900px; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(240,180,41,0.15), transparent);
+      width: 1000px; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(240,180,41,0.18), transparent);
       pointer-events: none;
     }
+    .up { color: var(--gain); }
+    .dn { color: var(--loss); }
 
     /* ── FEATURES ──────────────────────────────────── */
     .features {
@@ -521,7 +562,7 @@
 
 <!-- ── DASHBOARD PREVIEW ─────────────────────────────── -->
 <section class="mockup-section" id="preview">
-  <p class="mockup-label fade-up">// DASHBOARD PREVIEW</p>
+  <p class="mockup-label fade-up">// LIVE DASHBOARD PREVIEW</p>
 
   <div class="mockup-wrap fade-up">
     <!-- browser chrome -->
@@ -529,115 +570,156 @@
       <div class="mock-dot red"></div>
       <div class="mock-dot yellow"></div>
       <div class="mock-dot green"></div>
-      <div class="mock-url">tonyverin.dev/dashboard</div>
+      <div class="mock-url">🔒 tonyverin.dev/dashboard</div>
     </div>
 
-    <!-- stat cards -->
-    <div class="mock-body">
-      <div class="mock-stat">
-        <div class="mock-stat-lbl">TOTAL VALUE</div>
-        <div class="mock-stat-val">$84,320</div>
-        <div class="mock-stat-sub up">+$1,240 today</div>
+    <!-- dashboard header -->
+    <div class="db-header">
+      <div class="db-logo">4RCH3R</div>
+      <div class="db-vals">
+        <div class="db-val-item"><span class="db-val-lbl">INVESTED</span><span class="db-val-num">$68,320.44</span></div>
+        <div class="db-val-item"><span class="db-val-lbl">CASH</span><span class="db-val-num">$16,000.00</span></div>
+        <div class="db-val-item"><span class="db-val-lbl">TOTAL</span><span class="db-val-total">$84,320.44</span></div>
       </div>
-      <div class="mock-stat">
-        <div class="mock-stat-lbl">TOTAL P&amp;L</div>
-        <div class="mock-stat-val" style="color:var(--gain)">+$12,840</div>
-        <div class="mock-stat-sub up">+18.0% all time</div>
+      <div class="db-actions">
+        <div class="db-btn primary">+ Position</div>
+        <div class="db-btn">Deposit</div>
+        <div class="db-btn">Withdraw</div>
+        <div class="db-btn">Export</div>
+        <div class="db-btn">Snapshot</div>
       </div>
-      <div class="mock-stat">
-        <div class="mock-stat-lbl">DAILY CHANGE</div>
-        <div class="mock-stat-val" style="color:var(--gain)">+1.49%</div>
-        <div class="mock-stat-sub" style="color:var(--dim)">vs yesterday</div>
-      </div>
-      <div class="mock-stat">
-        <div class="mock-stat-lbl">CASH</div>
-        <div class="mock-stat-val">$8,400</div>
-        <div class="mock-stat-sub" style="color:var(--dim)">9.97% allocation</div>
-      </div>
+    </div>
 
-      <!-- chart -->
-      <div class="mock-chart-wrap">
-        <div class="mock-chart-hdr">
-          <div class="mock-chart-title">// PORTFOLIO HEARTRATE</div>
-          <div class="mock-pills">
-            <div class="mock-pill">1W</div>
-            <div class="mock-pill active">1M</div>
-            <div class="mock-pill">3M</div>
-            <div class="mock-pill">1Y</div>
+    <!-- stats bar -->
+    <div class="db-stats">
+      <div class="db-stat-item"><div class="db-stat-lbl">TOTAL P&amp;L</div><div class="db-stat-val gain">+$12,026.37</div></div>
+      <div class="db-stat-item"><div class="db-stat-lbl">DAILY %</div><div class="db-stat-val gain">+2.00%</div></div>
+      <div class="db-stat-item"><div class="db-stat-lbl">DAILY $</div><div class="db-stat-val gain">+$289.75</div></div>
+      <div class="db-stat-item"><div class="db-stat-lbl">WORST TODAY</div><div class="db-stat-val loss">AMD −11.44%</div></div>
+      <div class="db-fng">
+        <div><div class="db-stat-lbl">FEAR &amp; GREED</div><div style="display:flex;align-items:baseline;gap:4px"><span class="db-fng-score">38</span><span style="color:var(--loss);font-size:0.55rem">FEAR</span></div></div>
+        <div class="db-pills" style="margin-left:1rem">
+          <div class="db-pill">1W</div>
+          <div class="db-pill active">1M</div>
+          <div class="db-pill">3M</div>
+          <div class="db-pill">1Y</div>
+          <div class="db-pill">ALL</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- main: left (chart + table) + right (AI chat) -->
+    <div class="db-main">
+      <div class="db-left">
+        <!-- chart -->
+        <div class="db-chart-area">
+          <div class="db-chart-hdr">
+            <span class="db-chart-title"><span class="live-dot"></span>// PORTFOLIO HEARTRATE · 1M</span>
+            <span style="font-size:0.48rem;color:var(--xd)">— Portfolio &nbsp;&nbsp;- - SPY</span>
+          </div>
+          <svg class="db-svg" viewBox="0 0 760 140" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="dbFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00d97e" stop-opacity="0.20"/>
+                <stop offset="100%" stop-color="#00d97e" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="35"  x2="760" y2="35"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+            <line x1="0" y1="70"  x2="760" y2="70"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+            <line x1="0" y1="105" x2="760" y2="105" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+            <line x1="190" y1="0" x2="190" y2="140" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="380" y1="0" x2="380" y2="140" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="570" y1="0" x2="570" y2="140" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <text x="4" y="33"  font-size="7" fill="rgba(107,135,158,0.6)" font-family="monospace">$90k</text>
+            <text x="4" y="68"  font-size="7" fill="rgba(107,135,158,0.6)" font-family="monospace">$75k</text>
+            <text x="4" y="103" font-size="7" fill="rgba(107,135,158,0.6)" font-family="monospace">$60k</text>
+            <path d="M0,118 C15,114 30,108 55,100 S90,88 120,82 S160,76 190,70 S230,74 255,64 S285,50 315,42 S355,34 385,28 S425,22 455,17 S510,13 580,10 S660,8 760,6 L760,140 L0,140 Z" fill="url(#dbFill)"/>
+            <path d="M0,118 C15,114 30,108 55,100 S90,88 120,82 S160,76 190,70 S230,74 255,64 S285,50 315,42 S355,34 385,28 S425,22 455,17 S510,13 580,10 S660,8 760,6" fill="none" stroke="#00d97e" stroke-width="1.8"/>
+            <path d="M0,116 C30,112 70,104 110,96 S175,86 215,82 S270,78 310,74 S360,66 400,60 S450,52 490,47 S550,40 620,35 S700,30 760,28" fill="none" stroke="#3d9cf0" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.5"/>
+            <circle cx="760" cy="6" r="5" fill="rgba(0,217,126,0.2)"/>
+            <circle cx="760" cy="6" r="2.5" fill="#00d97e"/>
+          </svg>
+        </div>
+
+        <!-- holdings table -->
+        <div class="db-table">
+          <div class="db-table-hdr">
+            <div>TICKER</div><div>SHARES</div><div>PRICE</div><div>VALUE</div><div>ALLOC</div><div>DAY%</div><div>DAY$</div><div>P&amp;L%</div><div>P&amp;L$</div><div></div>
+          </div>
+          <div class="db-table-body" id="dbRows">
+            <div class="db-tr"><div class="db-td ticker">AMD</div><div class="db-td num">3.3</div><div class="db-td num">$63.49</div><div class="db-td num">$209.51</div><div class="db-td num">0.25%</div><div class="db-td loss">-11.44%</div><div class="db-td loss">-$8.20</div><div class="db-td loss">-27.3%</div><div class="db-td loss">-$79.2</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">AMZN</div><div class="db-td num">2.5</div><div class="db-td num">$212.48</div><div class="db-td num">$531.20</div><div class="db-td num">0.63%</div><div class="db-td gain">+1.75%</div><div class="db-td gain">+$3.65</div><div class="db-td gain">+12.1%</div><div class="db-td gain">+$57.4</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">AAPL</div><div class="db-td num">30</div><div class="db-td num">$211.30</div><div class="db-td num">$6,339</div><div class="db-td num">7.52%</div><div class="db-td gain">+0.52%</div><div class="db-td gain">+$1.09</div><div class="db-td gain">+18.7%</div><div class="db-td gain">+$996</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">AVGO</div><div class="db-td num">8.1</div><div class="db-td num">$224.40</div><div class="db-td num">$1,817</div><div class="db-td num">2.16%</div><div class="db-td gain">+0.84%</div><div class="db-td gain">+$1.87</div><div class="db-td gain">+22.4%</div><div class="db-td gain">+$333</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">META</div><div class="db-td num">8</div><div class="db-td num">$620.15</div><div class="db-td num">$4,961</div><div class="db-td num">5.88%</div><div class="db-td gain">+1.44%</div><div class="db-td gain">+$8.82</div><div class="db-td gain">+42.1%</div><div class="db-td gain">+$1,461</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">MSFT</div><div class="db-td num">15</div><div class="db-td num">$452.80</div><div class="db-td num">$6,792</div><div class="db-td num">8.06%</div><div class="db-td gain">+0.91%</div><div class="db-td gain">+$4.09</div><div class="db-td gain">+9.4%</div><div class="db-td gain">+$585</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">NVDA</div><div class="db-td num">12</div><div class="db-td num">$131.58</div><div class="db-td num">$1,578</div><div class="db-td num">1.87%</div><div class="db-td loss">-0.43%</div><div class="db-td loss">-$0.57</div><div class="db-td gain">+31.2%</div><div class="db-td gain">+$376</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
+            <div class="db-tr"><div class="db-td ticker">TSLA</div><div class="db-td num">20</div><div class="db-td num">$285.90</div><div class="db-td num">$5,718</div><div class="db-td num">6.78%</div><div class="db-td gain">+1.75%</div><div class="db-td gain">+$4.92</div><div class="db-td loss">-7.3%</div><div class="db-td loss">-$450</div><div class="db-td-ops"><div class="db-op">Edit</div><div class="db-op">Sell</div></div></div>
           </div>
         </div>
-        <svg class="mock-svg" viewBox="0 0 600 160" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#00d97e" stop-opacity="0.22"/>
-              <stop offset="100%" stop-color="#00d97e" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          <!-- grid lines -->
-          <line x1="0" y1="40"  x2="600" y2="40"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
-          <line x1="0" y1="80"  x2="600" y2="80"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
-          <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
-          <line x1="150" y1="0" x2="150" y2="160" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-          <line x1="300" y1="0" x2="300" y2="160" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-          <line x1="450" y1="0" x2="450" y2="160" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-          <!-- filled area -->
-          <path d="M0,130 C20,125 40,118 70,108 S110,92 140,85 S180,78 210,72 S250,76 275,66 S305,50 335,42 S375,34 405,28 S445,22 475,16 S530,11 600,8 L600,160 L0,160 Z" fill="url(#chartFill)"/>
-          <!-- portfolio line -->
-          <path d="M0,130 C20,125 40,118 70,108 S110,92 140,85 S180,78 210,72 S250,76 275,66 S305,50 335,42 S375,34 405,28 S445,22 475,16 S530,11 600,8" fill="none" stroke="#00d97e" stroke-width="2"/>
-          <!-- SPY benchmark dashed -->
-          <path d="M0,128 C30,122 70,112 110,103 S170,90 210,85 S260,80 300,75 S350,65 390,58 S440,50 480,44 S545,36 600,32" fill="none" stroke="#3d9cf0" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.5"/>
-          <!-- pullback dip highlight -->
-          <path d="M240,72 L275,76 L310,62" fill="none" stroke="rgba(255,69,96,0.3)" stroke-width="1.5"/>
-          <!-- today dot + glow -->
-          <circle cx="600" cy="8" r="5" fill="rgba(0,217,126,0.2)"/>
-          <circle cx="600" cy="8" r="3" fill="#00d97e"/>
-          <!-- y-axis labels -->
-          <text x="4" y="38"  font-size="7" fill="rgba(107,135,158,0.7)" font-family="monospace">$90k</text>
-          <text x="4" y="78"  font-size="7" fill="rgba(107,135,158,0.7)" font-family="monospace">$75k</text>
-          <text x="4" y="118" font-size="7" fill="rgba(107,135,158,0.7)" font-family="monospace">$60k</text>
-          <!-- legend -->
-          <line x1="460" y1="12" x2="476" y2="12" stroke="#00d97e" stroke-width="2"/>
-          <text x="479" y="15" font-size="7" fill="rgba(107,135,158,0.9)" font-family="monospace">Portfolio</text>
-          <line x1="530" y1="12" x2="546" y2="12" stroke="#3d9cf0" stroke-width="1.2" stroke-dasharray="4 3"/>
-          <text x="549" y="15" font-size="7" fill="rgba(107,135,158,0.9)" font-family="monospace">SPY</text>
-        </svg>
       </div>
 
-      <!-- holdings -->
-      <div class="mock-holdings">
-        <div class="mock-holdings-title">// POSITIONS</div>
-        <div class="mock-row">
-          <span class="mock-ticker">NVDA</span>
-          <span class="mock-shares">12 sh</span>
-          <span class="mock-pnl up">+31.2%</span>
+      <!-- AI chat -->
+      <div class="db-right">
+        <div class="db-chat-hdr">
+          <span>// AI TERMINAL</span>
+          <span class="db-chat-live">● BEDROCK</span>
         </div>
-        <div class="mock-row">
-          <span class="mock-ticker">AAPL</span>
-          <span class="mock-shares">30 sh</span>
-          <span class="mock-pnl up">+18.7%</span>
+        <div class="db-chat-msgs" id="chatMsgs">
+          <div class="db-msg user">Analyse my biggest risk positions</div>
+          <div class="db-msg ai" id="aiReply" style="font-size:0.52rem;line-height:1.6">AMD is your only losing position at −27.3% — consider a stop-loss or full exit.<br><br>META at 42.1% gain is overweight at 5.9% of portfolio — trimming 2–3 shares locks real profit.<br><br>TSLA down 7.3% on 20 shares — watch $275 support.</div>
+          <div class="db-msg user" id="userQ2" style="display:none">What's driving AAPL today?</div>
+          <div class="db-msg ai" id="aiTyping" style="display:none"><span class="ai-typing"><span></span><span></span><span></span></span></div>
+          <div class="db-msg ai" id="aiReply2" style="display:none;font-size:0.52rem;line-height:1.6">AAPL up +0.52% on iPhone demand data from Asia. Services revenue beat estimates. Analysts raised PT to $240.</div>
         </div>
-        <div class="mock-row">
-          <span class="mock-ticker">MSFT</span>
-          <span class="mock-shares">15 sh</span>
-          <span class="mock-pnl up">+9.4%</span>
-        </div>
-        <div class="mock-row">
-          <span class="mock-ticker">META</span>
-          <span class="mock-shares">8 sh</span>
-          <span class="mock-pnl up">+42.1%</span>
-        </div>
-        <div class="mock-row">
-          <span class="mock-ticker">TSLA</span>
-          <span class="mock-shares">20 sh</span>
-          <span class="mock-pnl dn">-7.3%</span>
+        <div class="db-chat-input">
+          <input class="db-input-field" value="Compare to SPY benchmark" readonly/>
+          <div class="db-send">SEND</div>
         </div>
       </div>
+    </div>
 
-      <!-- AI chat strip -->
-      <div class="mock-chat">
-        <span class="mock-chat-badge">// AI</span>
-        <span class="mock-chat-msg">NVDA is your top performer at +31.2%. Consider trimming 20% to lock gains — concentration risk is elevated at 18% of portfolio.</span>
-        <span class="mock-chat-gain">Bedrock ✓</span>
+    <!-- bottom sections -->
+    <div class="db-bottom">
+      <div class="db-section">
+        <div class="db-section-title">// PORTFOLIO ALLOCATION</div>
+        <div class="db-alloc-bar">
+          <div class="db-alloc-seg" style="width:8.06%;background:#f0b429"></div>
+          <div class="db-alloc-seg" style="width:7.52%;background:#00d97e"></div>
+          <div class="db-alloc-seg" style="width:6.78%;background:#3d9cf0"></div>
+          <div class="db-alloc-seg" style="width:5.88%;background:#a78bfa"></div>
+          <div class="db-alloc-seg" style="width:19%;background:#2e4a60"></div>
+          <div class="db-alloc-seg" style="flex:1;background:#162028"></div>
+        </div>
+        <div class="db-alloc-legend">
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#f0b429"></div>MSFT 8.1%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#00d97e"></div>AAPL 7.5%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#3d9cf0"></div>TSLA 6.8%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#a78bfa"></div>META 5.9%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#2e4a60"></div>CASH 19%</div>
+        </div>
+      </div>
+      <div class="db-section">
+        <div class="db-section-title">// SECTOR ALLOCATION</div>
+        <div class="db-alloc-bar">
+          <div class="db-alloc-seg" style="width:62%;background:#f0b429"></div>
+          <div class="db-alloc-seg" style="width:14%;background:#3d9cf0"></div>
+          <div class="db-alloc-seg" style="width:5%;background:#00d97e"></div>
+          <div class="db-alloc-seg" style="flex:1;background:#162028"></div>
+        </div>
+        <div class="db-alloc-legend">
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#f0b429"></div>Technology 62%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#3d9cf0"></div>Comm. Svcs 14%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#00d97e"></div>Cons. Disc 5%</div>
+          <div class="db-alloc-item"><div class="db-alloc-dot" style="background:#162028"></div>Cash 19%</div>
+        </div>
+      </div>
+      <div class="db-section">
+        <div class="db-section-title">// TRADE HISTORY &nbsp;<span class="gain">P&amp;L +$2,026</span></div>
+        <div class="db-trade-row"><span class="ticker">NVDA</span><span>SELL 5sh @ $138</span><span class="gain">+$312</span></div>
+        <div class="db-trade-row"><span class="ticker">META</span><span>SELL 2sh @ $601</span><span class="gain">+$188</span></div>
+        <div class="db-trade-row"><span class="ticker">CASH</span><span>DEPOSIT</span><span style="color:var(--blue)">+$5,000</span></div>
+        <div class="db-trade-row"><span class="ticker">AMD</span><span>BUY 3.3sh @ $87</span><span style="color:var(--dim)">—</span></div>
       </div>
     </div>
   </div>
@@ -782,8 +864,37 @@
   // ── Scroll fade-in ───────────────────────────────────
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("visible"); } });
-  }, { threshold: 0.12 });
+  }, { threshold: 0.08 });
   document.querySelectorAll(".fade-up").forEach(el => observer.observe(el));
+
+  // ── Row flash animation (simulates live price update) ─
+  const rows = document.querySelectorAll(".db-tr");
+  if (rows.length) {
+    setInterval(() => {
+      const r = rows[Math.floor(Math.random() * rows.length)];
+      r.classList.remove("flash");
+      void r.offsetWidth; // reflow
+      r.classList.add("flash");
+    }, 1800);
+  }
+
+  // ── AI chat sequence ─────────────────────────────────
+  setTimeout(() => {
+    const q2 = document.getElementById("userQ2");
+    const typing = document.getElementById("aiTyping");
+    const reply2 = document.getElementById("aiReply2");
+    if (!q2) return;
+    q2.style.display = "block";
+    setTimeout(() => {
+      typing.style.display = "block";
+      setTimeout(() => {
+        typing.style.display = "none";
+        reply2.style.display = "block";
+        const msgs = document.getElementById("chatMsgs");
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      }, 2200);
+    }, 600);
+  }, 4000);
 </script>
 </body>
 </html>

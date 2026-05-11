@@ -1,0 +1,268 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - link "4RCH3R // TERMINAL" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]:
+      - link "Sign In" [ref=e5] [cursor=pointer]:
+        - /url: /login
+      - link "Get Started →" [ref=e6] [cursor=pointer]:
+        - /url: /login
+  - generic [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: SPY
+      - generic [ref=e11]: $582.14
+      - generic [ref=e12]: +0.84%
+    - generic [ref=e13]:
+      - generic [ref=e14]: QQQ
+      - generic [ref=e15]: $496.73
+      - generic [ref=e16]: +1.12%
+    - generic [ref=e17]:
+      - generic [ref=e18]: BTC/USD
+      - generic [ref=e19]: $103,241
+      - generic [ref=e20]: +2.31%
+    - generic [ref=e21]:
+      - generic [ref=e22]: VIX
+      - generic [ref=e23]: "14.22"
+      - generic [ref=e24]: "-3.10%"
+    - generic [ref=e25]:
+      - generic [ref=e26]: NVDA
+      - generic [ref=e27]: $131.58
+      - generic [ref=e28]: "-0.43%"
+    - generic [ref=e29]:
+      - generic [ref=e30]: TSLA
+      - generic [ref=e31]: $285.90
+      - generic [ref=e32]: +1.75%
+    - generic [ref=e33]:
+      - generic [ref=e34]: AAPL
+      - generic [ref=e35]: $211.30
+      - generic [ref=e36]: +0.52%
+    - generic [ref=e37]:
+      - generic [ref=e38]: GOLD
+      - generic [ref=e39]: $3,214
+      - generic [ref=e40]: +0.30%
+    - generic [ref=e41]:
+      - generic [ref=e42]: EUR/USD
+      - generic [ref=e43]: "1.1234"
+      - generic [ref=e44]: +0.12%
+    - generic [ref=e45]:
+      - generic [ref=e46]: AMZN
+      - generic [ref=e47]: $219.40
+      - generic [ref=e48]: "-0.28%"
+    - generic [ref=e49]:
+      - generic [ref=e50]: MSFT
+      - generic [ref=e51]: $452.80
+      - generic [ref=e52]: +0.91%
+    - generic [ref=e53]:
+      - generic [ref=e54]: META
+      - generic [ref=e55]: $620.15
+      - generic [ref=e56]: +1.44%
+    - generic [ref=e57]:
+      - generic [ref=e58]: SPY
+      - generic [ref=e59]: $582.14
+      - generic [ref=e60]: +0.84%
+    - generic [ref=e61]:
+      - generic [ref=e62]: QQQ
+      - generic [ref=e63]: $496.73
+      - generic [ref=e64]: +1.12%
+    - generic [ref=e65]:
+      - generic [ref=e66]: BTC/USD
+      - generic [ref=e67]: $103,241
+      - generic [ref=e68]: +2.31%
+    - generic [ref=e69]:
+      - generic [ref=e70]: VIX
+      - generic [ref=e71]: "14.22"
+      - generic [ref=e72]: "-3.10%"
+    - generic [ref=e73]:
+      - generic [ref=e74]: NVDA
+      - generic [ref=e75]: $131.58
+      - generic [ref=e76]: "-0.43%"
+    - generic [ref=e77]:
+      - generic [ref=e78]: TSLA
+      - generic [ref=e79]: $285.90
+      - generic [ref=e80]: +1.75%
+    - generic [ref=e81]:
+      - generic [ref=e82]: AAPL
+      - generic [ref=e83]: $211.30
+      - generic [ref=e84]: +0.52%
+    - generic [ref=e85]:
+      - generic [ref=e86]: GOLD
+      - generic [ref=e87]: $3,214
+      - generic [ref=e88]: +0.30%
+    - generic [ref=e89]:
+      - generic [ref=e90]: EUR/USD
+      - generic [ref=e91]: "1.1234"
+      - generic [ref=e92]: +0.12%
+    - generic [ref=e93]:
+      - generic [ref=e94]: AMZN
+      - generic [ref=e95]: $219.40
+      - generic [ref=e96]: "-0.28%"
+    - generic [ref=e97]:
+      - generic [ref=e98]: MSFT
+      - generic [ref=e99]: $452.80
+      - generic [ref=e100]: +0.91%
+    - generic [ref=e101]:
+      - generic [ref=e102]: META
+      - generic [ref=e103]: $620.15
+      - generic [ref=e104]: +1.44%
+  - generic [ref=e105]:
+    - generic [ref=e106]: INVESTMENT TERMINAL
+    - heading "Your portfolio. Reloaded." [level=1] [ref=e107]:
+      - text: Your portfolio.
+      - text: Reloaded.
+    - paragraph [ref=e108]: AI-powered investment terminal for serious traders. Live prices, portfolio analytics, and Bedrock-powered insights — all in one dark terminal.
+    - generic [ref=e109]:
+      - generic [ref=e110]: $
+      - generic [ref=e111]: a
+    - generic [ref=e113]:
+      - link "Launch Terminal →" [ref=e114] [cursor=pointer]:
+        - /url: /login
+      - link "See Preview" [ref=e115] [cursor=pointer]:
+        - /url: "#preview"
+    - generic [ref=e116]:
+      - generic [ref=e117]:
+        - generic [ref=e118]: SPY
+        - generic [ref=e119]: $582.14
+        - generic [ref=e120]: +0.84%
+      - generic [ref=e121]:
+        - generic [ref=e122]: QQQ
+        - generic [ref=e123]: $496.73
+        - generic [ref=e124]: +1.12%
+      - generic [ref=e125]:
+        - generic [ref=e126]: BTC/USD
+        - generic [ref=e127]: $103,241
+        - generic [ref=e128]: +2.31%
+      - generic [ref=e129]:
+        - generic [ref=e130]: NVDA
+        - generic [ref=e131]: $131.58
+        - generic [ref=e132]: "-0.43%"
+      - generic [ref=e133]:
+        - generic [ref=e134]: VIX
+        - generic [ref=e135]: "14.22"
+        - generic [ref=e136]: "-3.10%"
+  - generic [ref=e137]:
+    - paragraph [ref=e138]: // DASHBOARD PREVIEW
+    - generic [ref=e139]:
+      - generic [ref=e144]: tonyverin.dev/dashboard
+      - generic [ref=e145]:
+        - generic [ref=e146]:
+          - generic [ref=e147]: TOTAL VALUE
+          - generic [ref=e148]: $84,320
+          - generic [ref=e149]: +$1,240 today
+        - generic [ref=e150]:
+          - generic [ref=e151]: TOTAL P&L
+          - generic [ref=e152]: +$12,840
+          - generic [ref=e153]: +18.0% all time
+        - generic [ref=e154]:
+          - generic [ref=e155]: DAILY CHANGE
+          - generic [ref=e156]: +1.49%
+          - generic [ref=e157]: vs yesterday
+        - generic [ref=e158]:
+          - generic [ref=e159]: CASH
+          - generic [ref=e160]: $8,400
+          - generic [ref=e161]: 9.97% allocation
+        - generic [ref=e162]:
+          - generic [ref=e163]:
+            - generic [ref=e164]: // PORTFOLIO HEARTRATE
+            - generic [ref=e165]:
+              - generic [ref=e166]: 1W
+              - generic [ref=e167]: 1M
+              - generic [ref=e168]: 3M
+              - generic [ref=e169]: 1Y
+          - img [ref=e170]:
+            - generic [ref=e177]: $90k
+            - generic [ref=e178]: $75k
+            - generic [ref=e179]: $60k
+            - generic [ref=e180]: Portfolio
+            - generic [ref=e181]: SPY
+        - generic [ref=e182]:
+          - generic [ref=e183]: // POSITIONS
+          - generic [ref=e184]:
+            - generic [ref=e185]: NVDA
+            - generic [ref=e186]: 12 sh
+            - generic [ref=e187]: +31.2%
+          - generic [ref=e188]:
+            - generic [ref=e189]: AAPL
+            - generic [ref=e190]: 30 sh
+            - generic [ref=e191]: +18.7%
+          - generic [ref=e192]:
+            - generic [ref=e193]: MSFT
+            - generic [ref=e194]: 15 sh
+            - generic [ref=e195]: +9.4%
+          - generic [ref=e196]:
+            - generic [ref=e197]: META
+            - generic [ref=e198]: 8 sh
+            - generic [ref=e199]: +42.1%
+          - generic [ref=e200]:
+            - generic [ref=e201]: TSLA
+            - generic [ref=e202]: 20 sh
+            - generic [ref=e203]: "-7.3%"
+        - generic [ref=e204]:
+          - generic [ref=e205]: // AI
+          - generic [ref=e206]: NVDA is your top performer at +31.2%. Consider trimming 20% to lock gains — concentration risk is elevated at 18% of portfolio.
+          - generic [ref=e207]: Bedrock ✓
+  - generic [ref=e208]:
+    - generic [ref=e209]:
+      - generic [ref=e210]: 15+
+      - generic [ref=e211]: LIVE SYMBOLS
+    - generic [ref=e212]:
+      - generic [ref=e213]: 3×
+      - generic [ref=e214]: DAILY SNAPSHOTS
+    - generic [ref=e215]:
+      - generic [ref=e216]: AWS
+      - generic [ref=e217]: BEDROCK AI
+    - generic [ref=e218]:
+      - generic [ref=e219]: TLS
+      - generic [ref=e220]: ENCRYPTED
+  - generic [ref=e221]:
+    - paragraph [ref=e222]: // WHY 4RCH3R
+    - heading "Everything you need. Nothing you don't." [level=2] [ref=e223]:
+      - text: Everything you need.
+      - text: Nothing you don't.
+    - paragraph [ref=e224]: Built for traders who want signal, not noise.
+    - generic [ref=e225]:
+      - generic [ref=e226]:
+        - generic [ref=e227]: 🧠
+        - heading "AI-POWERED INSIGHTS" [level=3] [ref=e228]
+        - paragraph [ref=e229]: Ask anything about your portfolio. Powered by AWS Bedrock with live market context and DuckDuckGo web search baked in — no hallucinations about stale data.
+        - generic [ref=e230]: AWS BEDROCK
+      - generic [ref=e231]:
+        - generic [ref=e232]: 📈
+        - heading "LIVE MARKET DATA" [level=3] [ref=e233]
+        - paragraph [ref=e234]: Real-time prices for every position via yfinance. Heartrate chart with benchmark overlay, Fear & Greed index, sector allocation donut, and a live ticker tape.
+        - generic [ref=e235]: YFINANCE + DUCKDUCKGO
+      - generic [ref=e236]:
+        - generic [ref=e237]: ⚡
+        - heading "FULL PORTFOLIO OPS" [level=3] [ref=e238]
+        - paragraph [ref=e239]: Buy, sell, deposit, withdraw — all tracked with a complete trade log and realized P&L. Import from Excel, export snapshots, rename portfolios. Everything.
+        - generic [ref=e240]: MONGODB ATLAS
+      - generic [ref=e241]:
+        - generic [ref=e242]: 🔒
+        - heading "SECURE BY DEFAULT" [level=3] [ref=e243]
+        - paragraph [ref=e244]: JWT authentication with token versioning, bcrypt hashed passwords, TLS encryption, secrets in AWS SSM Parameter Store — never on disk in production.
+        - generic [ref=e245]: ZERO SECRETS ON DISK
+      - generic [ref=e246]:
+        - generic [ref=e247]: 📊
+        - heading "AUTOMATIC SNAPSHOTS" [level=3] [ref=e248]
+        - paragraph [ref=e249]: Three snapshots per market day — open, midday, close. Portfolio heartrate chart lets you visualize performance over 1W, 1M, 3M, 6M, or all time.
+        - generic [ref=e250]: 3× DAILY
+      - generic [ref=e251]:
+        - generic [ref=e252]: 🖥️
+        - heading "TERMINAL AESTHETIC" [level=3] [ref=e253]
+        - paragraph [ref=e254]: IBM Plex Mono. Deep navy. Amber accents. A UI that feels like it belongs in a trading desk — not a fintech SaaS with rounded corners and emoji buttons.
+        - generic [ref=e255]: DARK TERMINAL UI
+  - generic [ref=e256]:
+    - heading "Ready to take control?" [level=2] [ref=e257]
+    - paragraph [ref=e258]: Join and track your portfolio the way serious investors do.
+    - generic [ref=e259]:
+      - link "Launch Terminal →" [ref=e260] [cursor=pointer]:
+        - /url: /login
+      - link "See Preview" [ref=e261] [cursor=pointer]:
+        - /url: "#preview"
+  - contentinfo [ref=e262]:
+    - generic [ref=e263]: 4RCH3R
+    - generic [ref=e264]:
+      - link "Login" [ref=e265] [cursor=pointer]:
+        - /url: /login
+      - link "Preview" [ref=e266] [cursor=pointer]:
+        - /url: "#preview"
+    - generic [ref=e267]: // INVESTMENT TERMINAL — NOT FINANCIAL ADVICE

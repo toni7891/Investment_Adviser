@@ -403,6 +403,7 @@ async def call_ai_backend(user_message: str) -> dict:
                     status_code=response.status_code,
                     detail=f"{AI_BACKEND_NAME} API error: {error_text}",
                 )
+                
 
             try:
                 return response.json()
