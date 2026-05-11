@@ -1,5 +1,5 @@
 // Ref: [[formatters.js]] [[app.js]] [[routes.py]] [[PROJECT_MAP.md]]
-import { formatCurrency, formatPercent } from "./formatters.js";
+import { formatCurrency, formatPercent, escapeHtml } from "./formatters.js";
 
 let _chart = null;
 
@@ -72,9 +72,9 @@ function _renderDetail(data) {
           ? news
               .map(
                 (n) => `
-          <a class="news-item" href="${n.url}" target="_blank" rel="noopener noreferrer">
-            <div class="news-headline">${n.title}</div>
-            <div class="news-snippet">${n.snippet}</div>
+          <a class="news-item" href="${escapeHtml(n.url).replace(/^javascript:/i, "#")}" target="_blank" rel="noopener noreferrer">
+            <div class="news-headline">${escapeHtml(n.title)}</div>
+            <div class="news-snippet">${escapeHtml(n.snippet)}</div>
           </a>`
               )
               .join("")

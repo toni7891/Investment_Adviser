@@ -1,11 +1,7 @@
 // Ref: [[state.js]] [[ui.js]] [[app.js]] [[routes.py]] [[PROJECT_MAP.md]]
 import { state, authedFetch } from "./state.js";
 import { showToast } from "./ui.js";
-
-const escapeHtml = (text) => {
-  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
-  return String(text).replace(/[&<>"']/g, (m) => map[m]);
-};
+import { escapeHtml } from "./formatters.js";
 
 function addChatMessage(content, isUser) {
   const chatMessages = document.getElementById("chatMessages");

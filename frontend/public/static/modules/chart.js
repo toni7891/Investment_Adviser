@@ -1,6 +1,6 @@
 // Ref: [[state.js]] [[formatters.js]] [[portfolio.js]] [[app.js]] [[PROJECT_MAP.md]]
 import { state, authedFetch } from "./state.js";
-import { formatCurrency } from "./formatters.js";
+import { formatCurrency, escapeHtml } from "./formatters.js";
 
 // ─── Heartrate chart ──────────────────────────────────────────────────────────
 export async function loadHeartrate(period) {
@@ -209,7 +209,7 @@ export async function loadSectors() {
       listEl.innerHTML = sectors.map((s, i) => `
         <div class="sector-item">
           <span class="sector-dot" style="background:${colors[i]}"></span>
-          <span class="sector-name">${s.sector}</span>
+          <span class="sector-name">${escapeHtml(s.sector)}</span>
           <span class="sector-pct">${s.pct.toFixed(1)}%</span>
           <span class="sector-val">${formatCurrency(s.value)}</span>
         </div>

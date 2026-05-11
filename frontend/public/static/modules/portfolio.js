@@ -1,6 +1,6 @@
 // Ref: [[state.js]] [[formatters.js]] [[ui.js]] [[chart.js]] [[modals.js]] [[app.js]] [[PROJECT_MAP.md]]
 import { state, authedFetch } from "./state.js";
-import { formatCurrency, formatPercent, setSignedStatus } from "./formatters.js";
+import { formatCurrency, formatPercent, setSignedStatus, escapeHtml } from "./formatters.js";
 import { showToast, showConfirm } from "./ui.js";
 import { loadHeartrate, loadSectors } from "./chart.js";
 // openPositionModal and openSellModal are imported lazily via modals.js to avoid circular deps
@@ -201,9 +201,9 @@ export async function loadPortfolios() {
       card.setAttribute("role", "button");
       card.setAttribute("tabindex", "0");
       card.innerHTML = `
-        <div class="portfolio-card__title">${name}</div>
+        <div class="portfolio-card__title">${escapeHtml(name)}</div>
         <div class="portfolio-card__meta">Open portfolio</div>
-        <button class="portfolio-card__delete" data-name="${name}" title="Delete portfolio" aria-label="Delete portfolio">
+        <button class="portfolio-card__delete" data-name="${escapeHtml(name)}" title="Delete portfolio" aria-label="Delete portfolio">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6l-2 14H7L5 6"></path>
@@ -315,8 +315,8 @@ export async function loadTrades() {
       const pnl = t.realized_pnl || 0;
       return `
         <tr>
-          <td class="col-ticker">${t.ticker}</td>
-          <td class="col-num">${t.date}</td>
+          <td class="col-ticker">${escapeHtml(t.ticker)}</td>
+          <td class="col-num">${escapeHtml(t.date)}</td>
           <td class="col-num">${t.shares}</td>
           <td class="col-num">${formatCurrency(t.sell_price)}</td>
           <td class="col-num">${formatCurrency(t.avg_cost)}</td>
