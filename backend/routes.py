@@ -382,6 +382,7 @@ async def call_ai_backend(user_message: str) -> dict:
         try:
             reply_text = await asyncio.get_event_loop().run_in_executor(None, _invoke_bedrock)
         except Exception as e:
+            logger.error("AWS Bedrock invocation failed: %s", e, exc_info=True)
             raise HTTPException(status_code=502, detail=f"AWS Bedrock error: {e}")
         return {"choices": [{"message": {"content": reply_text}}]}
 
