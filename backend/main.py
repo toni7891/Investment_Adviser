@@ -14,15 +14,20 @@ import warnings
 def _load_ssm_secrets():
     try:
         import boto3
-        ssm = boto3.client("ssm", region_name=os.getenv("BEDROCK_REGION", "us-east-1"))
-        params = ssm.get_parameters_by_path(
-            Path="/investment-manager/",
-            WithDecryption=True,
-        )
-        for p in params["Parameters"]:
-            key = p["Name"].split("/")[-1]
-            os.environ.setdefault(key, p["Value"])
-        print(f"[SSM] Loaded {len(params['Parameters'])} secrets from SSM Parameter Store", flush=True)
+        ssm    = boto3.client("ssm", region_name=os.getenv("BEDROCK_REGION", "us-east-1"))
+        kwargs = {"Path": "/investment-manager/", "WithDecryption": True, "MaxResults": 10}
+        total  = 0
+        while True:
+            resp = ssm.get_parameters_by_path(**kwargs)
+            for p in resp["Parameters"]:
+                key = p["Name"].split("/")[-1]
+                os.environ.setdefault(key, p["Value"])
+                total += 1
+            next_token = resp.get("NextToken")
+            if not next_token:
+                break
+            kwargs["NextToken"] = next_token
+        print(f"[SSM] Loaded {total} secrets from SSM Parameter Store", flush=True)
     except Exception as e:
         print(f"[SSM] Load skipped: {e}", flush=True)
 
