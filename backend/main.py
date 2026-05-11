@@ -11,6 +11,23 @@ import logging
 import secrets
 import warnings
 
+def _load_ssm_secrets():
+    try:
+        import boto3
+        ssm = boto3.client("ssm", region_name=os.getenv("BEDROCK_REGION", "us-east-1"))
+        params = ssm.get_parameters_by_path(
+            Path="/investment-manager/",
+            WithDecryption=True,
+        )
+        for p in params["Parameters"]:
+            key = p["Name"].split("/")[-1]
+            os.environ.setdefault(key, p["Value"])
+        logging.getLogger(__name__).info("Loaded %d secrets from SSM", len(params["Parameters"]))
+    except Exception as e:
+        logging.getLogger(__name__).warning("SSM load skipped (running locally?): %s", e)
+
+_load_ssm_secrets()
+
 logger = logging.getLogger(__name__)
 
 # Suppress ResourceWarning about unclosed SQLite databases from third-party libraries
