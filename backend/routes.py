@@ -1,5 +1,5 @@
 # Ref: [[database.py]] [[search.py]] [[main.py]] [[PROJECT_MAP.md]]
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Header
 from io import BytesIO
 import asyncio
 import httpx
@@ -332,6 +332,7 @@ ALERT_ENABLED       = os.getenv("ALERT_ENABLED", "false").lower() == "true"
 ALERT_EMAIL         = os.getenv("ALERT_EMAIL", "")
 ALERT_THRESHOLD_PCT = float(os.getenv("ALERT_THRESHOLD_PCT", "5.0"))
 _ALERT_SENT: dict   = {}  # portfolio_id → "YYYY-MM-DD" (one alert per portfolio per day)
+INTERNAL_API_KEY    = os.getenv("INTERNAL_API_KEY", "")
 
 if LLM_BACKEND == "ollama":
     AI_API_URL      = OLLAMA_API_URL
@@ -751,6 +752,62 @@ async def admin_list_all_portfolios(_admin: dict = Depends(get_current_admin)):
         and c not in ("users", "portfolio_metadata")
     ]
     return {"portfolios": meta_docs + legacy}
+
+
+# ─── Internal endpoint (called by Lambda) ─────────────────────────────────────
+
+@router.post("/internal/daily-close")
+async def internal_daily_close(x_internal_key: str = Header(default="")):
+    """Record end-of-day snapshots for all portfolios and send a daily summary email."""
+    if not INTERNAL_API_KEY or x_internal_key != INTERNAL_API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database disconnected")
+
+    all_cols   = db.list_collection_names()
+    portfolios = [
+        c for c in all_cols
+        if not c.startswith("system.")
+        and not c.endswith("_history")
+        and not c.endswith("_trades")
+        and c not in ("users", "portfolio_metadata")
+    ]
+
+    _system_user   = {"username": "system", "role": "admin"}
+    results        = []
+    summary_lines  = []
+
+    for pid in portfolios:
+        try:
+            data       = await get_portfolio(pid, _system_user)
+            total      = data.get("total_balance", 0)
+            daily      = data.get("daily_change_pct", 0)
+            sign       = "+" if daily >= 0 else ""
+            summary_lines.append(f"  {pid}: ${total:,.2f} ({sign}{daily:.2f}%)")
+            results.append({"portfolio": pid, "status": "ok"})
+        except Exception as e:
+            results.append({"portfolio": pid, "status": f"error: {e}"})
+
+    if ALERT_ENABLED and ALERT_EMAIL and summary_lines:
+        try:
+            import boto3 as _boto3
+            ses  = _boto3.client("ses", region_name=BEDROCK_REGION)
+            body = "Daily Portfolio Summary\n" + "=" * 30 + "\n\n"
+            body += "\n".join(summary_lines)
+            body += "\n\nhttps://tonyverin.dev/app"
+            ses.send_email(
+                Source=ALERT_EMAIL,
+                Destination={"ToAddresses": [ALERT_EMAIL]},
+                Message={
+                    "Subject": {"Data": f"[4RCH3R] Daily Summary — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"},
+                    "Body":    {"Text": {"Data": body}},
+                },
+            )
+            logger.info("Daily summary email sent (%d portfolios)", len(summary_lines))
+        except Exception as e:
+            logger.warning("Daily summary email failed: %s", e)
+
+    return {"snapshotted": len(results), "results": results}
 
 
 # ─── Portfolio routes ──────────────────────────────────────────────────────────
