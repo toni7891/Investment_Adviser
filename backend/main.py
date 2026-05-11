@@ -22,9 +22,9 @@ def _load_ssm_secrets():
         for p in params["Parameters"]:
             key = p["Name"].split("/")[-1]
             os.environ.setdefault(key, p["Value"])
-        logging.getLogger(__name__).info("Loaded %d secrets from SSM", len(params["Parameters"]))
+        print(f"[SSM] Loaded {len(params['Parameters'])} secrets from SSM Parameter Store", flush=True)
     except Exception as e:
-        logging.getLogger(__name__).warning("SSM load skipped (running locally?): %s", e)
+        print(f"[SSM] Load skipped: {e}", flush=True)
 
 _load_ssm_secrets()
 
