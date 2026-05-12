@@ -287,9 +287,23 @@ export async function loadTrades() {
     const trades = data.trades || [];
 
     if (totalEl) {
-      const pnl = data.total_realized_pnl || 0;
+      const pnl      = data.total_realized_pnl || 0;
+      const taxEst   = pnl > 0 ? pnl * 0.25 : 0;
+      const afterTax = pnl - taxEst;
+
       totalEl.textContent = `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`;
       totalEl.className   = `trades-total-val ${pnl >= 0 ? "success" : "negative"}`;
+
+      const taxEl      = document.getElementById("tradesTaxEst");
+      const afterTaxEl = document.getElementById("tradesAfterTax");
+      if (taxEl) {
+        taxEl.textContent = taxEst > 0 ? `-${formatCurrency(taxEst)}` : formatCurrency(0);
+        taxEl.className   = `trades-total-val ${taxEst > 0 ? "negative" : ""}`;
+      }
+      if (afterTaxEl) {
+        afterTaxEl.textContent = `${afterTax >= 0 ? "+" : ""}${formatCurrency(afterTax)}`;
+        afterTaxEl.className   = `trades-total-val ${afterTax >= 0 ? "success" : "negative"}`;
+      }
     }
 
     if (!trades.length) {

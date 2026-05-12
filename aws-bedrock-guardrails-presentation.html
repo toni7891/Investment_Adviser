@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4RCH3R — AWS Integration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&amp;family=IBM+Plex+Sans:wght@300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+
+/* === DESIGN TOKENS (exact match from 4RCH3R style.css) === */
+:root {
+  --void:     #060a0f;
+  --bg:       #0b1018;
+  --panel:    #10181f;
+  --surface:  #162028;
+  --raised:   #1b2a38;
+  --hover:    #1f3046;
+
+  --rim:      rgba(255,255,255,0.07);
+  --rim-md:   rgba(255,255,255,0.12);
+  --rim-hi:   rgba(240,180,41,0.28);
+
+  --text:     #d8e4ee;
+  --text-dim: #6b879e;
+  --text-xd:  #2e4a60;
+
+  --amber:    #f0b429;
+  --amber-lo: rgba(240,180,41,0.10);
+  --gain:     #00d97e;
+  --gain-lo:  rgba(0,217,126,0.09);
+  --loss:     #ff4560;
+  --loss-lo:  rgba(255,69,96,0.09);
+  --blue:     #3d9cf0;
+  --blue-lo:  rgba(61,156,240,0.10);
+
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+/* === RESET + VIEWPORT BASE === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === BACKGROUND GRID (from app) === */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* === SLIDE SYSTEM === */
+.presentation {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(2rem, 6vw, 5rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  transform: translateX(32px);
+}
+
+.slide.active {
+  opacity: 1;
+  pointer-events: all;
+  transform: translateX(0);
+}
+
+.slide.prev {
+  opacity: 0;
+  transform: translateX(-32px);
+}
+
+/* === NAV UI === */
+.nav-dots {
+  position: fixed;
+  bottom: clamp(0.6rem, 1.5vh, 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  z-index: 100;
+  background: var(--void);
+  border: 1px solid var(--rim);
+  border-radius: 99px;
+  padding: 5px 10px;
+}
+
+.nav-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-xd);
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.nav-dot.active {
+  background: var(--amber);
+  width: 16px;
+  border-radius: 3px;
+  box-shadow: 0 0 6px rgba(240,180,41,0.5);
+}
+
+.slide-counter {
+  position: fixed;
+  top: clamp(0.6rem, 1.5vh, 1rem);
+  right: clamp(1rem, 2.5vw, 2rem);
+  font-size: clamp(0.5rem, 0.9vw, 0.62rem);
+  color: var(--text-xd);
+  letter-spacing: 0.14em;
+  z-index: 100;
+}
+
+.edit-btn {
+  position: fixed;
+  top: 14px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  padding: 4px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  z-index: 200;
+  letter-spacing: 0.12em;
+  transition: all 0.15s;
+}
+.edit-btn:hover, .edit-btn.on { color: var(--amber); border-color: var(--rim-hi); }
+#editBtn { left: 16px; }
+
+/* === SHARED COMPONENTS (matching app pane-hdr, cards, etc.) === */
+
+/* Pane-style header tag */
+.slide-tag {
+  font-size: clamp(0.5rem, 0.88vw, 0.6rem);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--amber);
+  text-transform: uppercase;
+  margin-bottom: clamp(0.3rem, 0.8vh, 0.55rem);
+}
+
+/* Main title */
+.slide-title {
+  font-size: clamp(1.1rem, 2.8vw, 2.2rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  line-height: 1.15;
+  margin-bottom: clamp(0.3rem, 0.8vh, 0.55rem);
+}
+
+/* Amber gradient rule (from app's hero-rule) */
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+}
+.rule-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rim-md) 40%, var(--rim-md) 60%, transparent);
+}
+.rule-glyph {
+  font-size: clamp(0.55rem, 0.9vw, 0.7rem);
+  color: var(--amber);
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+/* Panel card (matches portfolio-card / upload-zone) */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 10%, var(--amber) 50%, transparent 90%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+/* Left-accent card (matches bot message border-left style) */
+.card-amber { border-left: 2px solid var(--amber); background: var(--amber-lo); border-color: var(--rim-hi); }
+.card-gain  { border-left: 2px solid var(--gain);  background: var(--gain-lo);  border-color: rgba(0,217,126,0.18); }
+.card-loss  { border-left: 2px solid var(--loss);  background: var(--loss-lo);  border-color: rgba(255,69,96,0.18); }
+.card-blue  { border-left: 2px solid var(--blue);  background: var(--blue-lo);  border-color: rgba(61,156,240,0.18); }
+
+.card-pad   { padding: clamp(0.5rem, 1.2vh, 0.85rem) clamp(0.6rem, 1.3vw, 1rem); }
+
+/* Label / value pairs (matches mc-lbl / mc-val) */
+.lbl {
+  font-size: clamp(0.48rem, 0.82vw, 0.58rem);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-xd);
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+}
+
+.val {
+  font-size: clamp(0.62rem, 1.1vw, 0.76rem);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.val-amber { color: var(--amber); }
+.val-gain  { color: var(--gain);  }
+.val-loss  { color: var(--loss);  }
+.val-blue  { color: var(--blue);  }
+.val-dim   { color: var(--text-dim); }
+
+/* Code pill (matches field-display style) */
+.pill {
+  display: inline;
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--surface);
+  border: 1px solid var(--rim-md);
+  color: var(--amber);
+  padding: 0.05rem 0.32rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.pill-blue  { color: var(--blue); }
+.pill-gain  { color: var(--gain); }
+.pill-dim   { color: var(--text-dim); }
+
+/* List item with prefix (matches sb-item style) */
+.line-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin-bottom: clamp(0.2rem, 0.5vh, 0.35rem);
+  font-size: clamp(0.6rem, 1vw, 0.72rem);
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.line-item::before { content: attr(data-pre); color: var(--amber); opacity: 0.6; flex-shrink: 0; font-size: 0.85em; margin-top: 0.1em; }
+.line-item.gain::before { color: var(--gain); }
+.line-item.blue::before { color: var(--blue); }
+.line-item.loss::before { color: var(--loss); }
+
+/* === ANIMATIONS === */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ring-pulse {
+  0%,100% { transform: scale(1);    opacity: 1;   border-color: rgba(240,180,41,0.3);  }
+  50%      { transform: scale(1.06); opacity: 0.7; border-color: rgba(240,180,41,0.55); }
+}
+@keyframes glyph-glow {
+  0%,100% { text-shadow: 0 0 14px rgba(240,180,41,0.4); }
+  50%      { text-shadow: 0 0 28px rgba(240,180,41,0.7); }
+}
+@keyframes sys-pulse {
+  0%,100% { opacity: 1;   box-shadow: 0 0 6px var(--gain); }
+  50%      { opacity: 0.6; box-shadow: 0 0 14px var(--gain); }
+}
+
+.slide.active .a1 { animation: fadeUp 0.4s ease 0.05s both; }
+.slide.active .a2 { animation: fadeUp 0.4s ease 0.12s both; }
+.slide.active .a3 { animation: fadeUp 0.4s ease 0.19s both; }
+.slide.active .a4 { animation: fadeUp 0.4s ease 0.26s both; }
+.slide.active .a5 { animation: fadeUp 0.4s ease 0.33s both; }
+.slide.active .a6 { animation: fadeUp 0.4s ease 0.40s both; }
+.slide.active .a7 { animation: fadeUp 0.4s ease 0.47s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide * { animation: none !important; transition: opacity 0.1s !important; }
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 1 — TITLE
+   ═══════════════════════════════════════ */
+#s1 {
+  background: radial-gradient(ellipse 80% 55% at 50% 38%, rgba(61,156,240,0.06) 0%, transparent 60%);
+  text-align: center;
+}
+
+#s1 .mark {
+  position: relative;
+  width: clamp(48px, 7vw, 64px);
+  height: clamp(48px, 7vw, 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto clamp(0.8rem, 2vh, 1.4rem);
+}
+#s1 .mark-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(240,180,41,0.3);
+  animation: ring-pulse 3.5s ease-in-out infinite;
+}
+#s1 .mark-ring::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(240,180,41,0.12);
+}
+#s1 .mark-glyph {
+  font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+  color: var(--amber);
+  position: relative;
+  z-index: 1;
+  animation: glyph-glow 3.5s ease-in-out infinite;
+}
+
+#s1 .eyebrow {
+  font-size: clamp(0.48rem, 0.88vw, 0.6rem);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  color: var(--amber);
+  opacity: 0.75;
+  margin-bottom: clamp(0.35rem, 0.8vh, 0.6rem);
+}
+
+#s1 .hero-title {
+  font-size: clamp(1.6rem, 4.5vw, 3.8rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  line-height: 1.05;
+  margin-bottom: clamp(0.25rem, 0.6vh, 0.45rem);
+}
+
+#s1 .hero-title .hl {
+  color: var(--amber);
+  text-shadow: 0 0 28px rgba(240,180,41,0.35);
+}
+
+#s1 .sub {
+  font-size: clamp(0.6rem, 1.2vw, 0.82rem);
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  margin-bottom: clamp(1rem, 2.5vh, 1.8rem);
+}
+
+#s1 .chips {
+  display: flex;
+  gap: clamp(0.4rem, 1vw, 0.7rem);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: clamp(0.48rem, 0.85vw, 0.6rem);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 4px 14px;
+  border-radius: 99px;
+  border: 1px solid;
+}
+.chip-amber { color: var(--amber); border-color: rgba(240,180,41,0.3); background: var(--amber-lo); }
+.chip-gain  { color: var(--gain);  border-color: rgba(0,217,126,0.25);  background: var(--gain-lo);  }
+.chip-dim   { color: var(--text-dim); border-color: var(--rim-md); background: transparent; }
+
+#s1 .live-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: clamp(1.2rem, 3vh, 2rem);
+  font-size: clamp(0.48rem, 0.82vw, 0.58rem);
+  letter-spacing: 0.16em;
+  color: var(--gain);
+  font-weight: 600;
+}
+#s1 .sys-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--gain);
+  box-shadow: 0 0 8px var(--gain);
+  animation: sys-pulse 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 2 — THE PROBLEM
+   ═══════════════════════════════════════ */
+#s2 .content { width: 100%; max-width: 820px; }
+
+#s2 .prob-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: clamp(0.5rem, 1.2vw, 0.9rem);
+  margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+}
+
+#s2 .prob-card {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  border-top: 2px solid var(--loss);
+  padding: clamp(0.6rem, 1.5vh, 1rem) clamp(0.65rem, 1.3vw, 1rem);
+}
+
+#s2 .prob-num {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  font-weight: 600;
+  color: var(--loss);
+  opacity: 0.25;
+  line-height: 1;
+  margin-bottom: clamp(0.3rem, 0.7vh, 0.5rem);
+  font-variant-numeric: tabular-nums;
+}
+
+#s2 .prob-title {
+  font-size: clamp(0.58rem, 1vw, 0.72rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin-bottom: clamp(0.25rem, 0.6vh, 0.4rem);
+}
+
+#s2 .prob-desc {
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+#s2 .why-box {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.5rem, 1.2vh, 0.8rem) clamp(0.75rem, 1.5vw, 1.1rem);
+}
+
+#s2 .why-box .lbl { margin-bottom: 0.4rem; }
+
+#s2 .why-items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem 1.5rem;
+}
+
+#s2 .why-item {
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+#s2 .why-item::before { content: '>'; color: var(--amber); opacity: 0.55; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════
+   SLIDE 3 — ARCHITECTURE
+   ═══════════════════════════════════════ */
+#s3 .content { width: 100%; max-width: 880px; }
+
+#s3 .diagram {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.75rem, 2vh, 1.2rem) clamp(0.75rem, 2vw, 1.5rem);
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+  position: relative;
+  overflow: hidden;
+}
+
+#s3 .diagram::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 10%, var(--amber) 50%, transparent 90%);
+  opacity: 0.25;
+}
+
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.25rem, 0.6vw, 0.5rem);
+  margin-bottom: clamp(0.25rem, 0.6vh, 0.4rem);
+}
+
+.fn {
+  background: var(--surface);
+  border: 1px solid var(--rim);
+  border-radius: 4px;
+  padding: clamp(0.25rem, 0.55vh, 0.4rem) clamp(0.3rem, 0.65vw, 0.55rem);
+  text-align: center;
+  min-width: clamp(3.5rem, 7vw, 5.5rem);
+}
+
+.fn .nl {
+  font-size: clamp(0.4rem, 0.7vw, 0.54rem);
+  color: var(--text-xd);
+  line-height: 1.3;
+  letter-spacing: 0.05em;
+}
+
+.fn .na {
+  font-size: clamp(0.36rem, 0.6vw, 0.48rem);
+  color: var(--text-xd);
+  opacity: 0.6;
+  letter-spacing: 0.06em;
+  margin-top: 0.1rem;
+}
+
+.fn-amber { border-color: rgba(240,180,41,0.3); background: var(--amber-lo); }
+.fn-amber .nl { color: var(--amber); }
+.fn-gain  { border-color: rgba(0,217,126,0.25); background: var(--gain-lo); }
+.fn-gain .nl  { color: var(--gain); }
+.fn-blue  { border-color: rgba(61,156,240,0.25); background: var(--blue-lo); }
+.fn-blue .nl  { color: var(--blue); }
+.fn-red   { border-color: rgba(255,69,96,0.25); background: var(--loss-lo); }
+.fn-red .nl   { color: var(--loss); }
+
+.fa {
+  font-size: clamp(0.55rem, 0.9vw, 0.7rem);
+  color: var(--text-xd);
+  flex-shrink: 0;
+  font-family: var(--mono);
+}
+.fa-amber { color: var(--amber); opacity: 0.7; }
+.fa-gain  { color: var(--gain);  opacity: 0.7; }
+.fa-blue  { color: var(--blue);  opacity: 0.7; }
+.fa-red   { color: var(--loss);  opacity: 0.7; }
+
+.fork-wrap {
+  display: flex;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  justify-content: center;
+  align-items: flex-start;
+  margin: clamp(0.1rem, 0.4vh, 0.3rem) 0;
+}
+.fork-branch { display: flex; flex-direction: column; align-items: center; gap: 0.18rem; }
+
+.fork-badge {
+  font-size: clamp(0.36rem, 0.6vw, 0.48rem);
+  letter-spacing: 0.1em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+}
+.fb-red   { background: var(--loss-lo); color: var(--loss); }
+.fb-gain  { background: var(--gain-lo); color: var(--gain); }
+
+.or-sep {
+  align-self: center;
+  font-size: clamp(0.38rem, 0.62vw, 0.5rem);
+  color: var(--text-xd);
+  letter-spacing: 0.06em;
+}
+
+.cw-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: clamp(0.2rem, 0.5vh, 0.3rem);
+  font-size: clamp(0.38rem, 0.65vw, 0.5rem);
+  color: var(--text-xd);
+  letter-spacing: 0.06em;
+}
+
+#s3 .arch-note {
+  text-align: center;
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+#s3 .arch-note .hl { color: var(--amber); }
+
+/* ═══════════════════════════════════════
+   SLIDE 4 — AWS BEDROCK
+   ═══════════════════════════════════════ */
+#s4 .content { width: 100%; max-width: 860px; }
+
+#s4 .two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.6rem, 1.5vw, 1.1rem);
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+#s4 .col-head {
+  font-size: clamp(0.48rem, 0.82vw, 0.58rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--amber);
+  text-transform: uppercase;
+  margin-bottom: clamp(0.3rem, 0.7vh, 0.5rem);
+  padding-bottom: clamp(0.25rem, 0.5vh, 0.38rem);
+  border-bottom: 1px solid var(--rim);
+}
+
+#s4 .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: clamp(0.18rem, 0.4vh, 0.3rem) 0;
+  border-bottom: 1px solid var(--rim);
+  gap: 0.5rem;
+}
+#s4 .stat-row:last-child { border-bottom: none; }
+#s4 .stat-lbl { font-size: clamp(0.52rem, 0.88vw, 0.62rem); color: var(--text-dim); }
+#s4 .stat-val { font-size: clamp(0.52rem, 0.88vw, 0.62rem); color: var(--text); text-align: right; }
+#s4 .stat-val.amber { color: var(--amber); }
+#s4 .stat-val.gain  { color: var(--gain);  }
+#s4 .stat-val.blue  { color: var(--blue);  }
+
+#s4 .bottom-bar {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-left: 2px solid var(--blue);
+  border-radius: 0 4px 4px 0;
+  padding: clamp(0.4rem, 1vh, 0.65rem) clamp(0.65rem, 1.3vw, 1rem);
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 5 — BEDROCK GUARDRAILS (concise)
+   ═══════════════════════════════════════ */
+#s5 .content { width: 100%; max-width: 820px; }
+
+#s5 .guard-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: clamp(0.5rem, 1.2vw, 0.85rem);
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+#s5 .gc-head {
+  font-size: clamp(0.48rem, 0.82vw, 0.58rem);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  text-transform: uppercase;
+  margin-bottom: clamp(0.3rem, 0.7vh, 0.48rem);
+  padding-bottom: clamp(0.22rem, 0.5vh, 0.35rem);
+  border-bottom: 1px solid var(--rim);
+}
+
+#s5 .gc-item {
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-bottom: clamp(0.18rem, 0.4vh, 0.3rem);
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+#s5 .gc-item::before { content: '—'; color: var(--amber); opacity: 0.45; flex-shrink: 0; font-size: 0.8em; }
+
+#s5 .guard-how {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.45rem, 1vh, 0.7rem) clamp(0.65rem, 1.3vw, 1rem);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1.5rem;
+}
+
+#s5 .gh-item {
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  display: flex;
+  gap: 0.4rem;
+  line-height: 1.4;
+}
+#s5 .gh-item::before { content: '>'; color: var(--amber); opacity: 0.5; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════
+   SLIDE 6 — SSM PARAMETER STORE
+   ═══════════════════════════════════════ */
+#s6 .content { width: 100%; max-width: 860px; }
+
+#s6 .ssm-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.6rem, 1.5vw, 1.1rem);
+}
+
+#s6 .params-table {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#s6 .params-table-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: clamp(0.3rem, 0.6vh, 0.45rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  border-bottom: 1px solid var(--rim);
+  background: var(--surface);
+}
+
+#s6 .param-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: clamp(0.28rem, 0.55vh, 0.4rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  border-bottom: 1px solid var(--rim);
+  gap: 0.5rem;
+  align-items: center;
+}
+#s6 .param-row:last-child { border-bottom: none; }
+
+#s6 .param-name {
+  font-size: clamp(0.52rem, 0.88vw, 0.62rem);
+  color: var(--blue);
+  letter-spacing: 0.03em;
+}
+
+#s6 .param-type {
+  font-size: clamp(0.45rem, 0.75vw, 0.55rem);
+  color: var(--text-xd);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#s6 .param-type.secure { color: var(--gain); }
+
+#s6 .code-block {
+  background: var(--void);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.45rem, 1vh, 0.7rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  font-size: clamp(0.5rem, 0.85vw, 0.62rem);
+  color: var(--text-dim);
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+#s6 .code-block .c-comment { color: var(--text-xd); }
+#s6 .code-block .c-fn      { color: var(--blue); }
+#s6 .code-block .c-str     { color: var(--gain); }
+#s6 .code-block .c-kw      { color: var(--amber); }
+
+#s6 .ssm-note {
+  margin-top: clamp(0.4rem, 1vh, 0.65rem);
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-left: 2px solid var(--gain);
+  border-radius: 0 4px 4px 0;
+  padding: clamp(0.35rem, 0.8vh, 0.55rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 7 — SES + LAMBDA + EVENTBRIDGE
+   ═══════════════════════════════════════ */
+#s7 .content { width: 100%; max-width: 880px; }
+
+#s7 .svc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: clamp(0.5rem, 1.2vw, 0.85rem);
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+#s7 .svc-card {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#s7 .svc-hdr {
+  padding: clamp(0.35rem, 0.8vh, 0.55rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  border-bottom: 1px solid var(--rim);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+#s7 .svc-name {
+  font-size: clamp(0.52rem, 0.88vw, 0.62rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+}
+
+#s7 .svc-cat {
+  font-size: clamp(0.44rem, 0.72vw, 0.52rem);
+  color: var(--text-xd);
+  letter-spacing: 0.08em;
+}
+
+#s7 .svc-body {
+  padding: clamp(0.45rem, 1vh, 0.7rem) clamp(0.6rem, 1.2vw, 0.9rem);
+}
+
+#s7 .flow-note {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.4rem, 0.9vh, 0.6rem) clamp(0.65rem, 1.3vw, 1rem);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#s7 .fn-step {
+  font-size: clamp(0.5rem, 0.85vw, 0.62rem);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+#s7 .fn-step .arrow { color: var(--amber); opacity: 0.6; }
+#s7 .fn-step .svc-tag {
+  color: var(--amber);
+  font-size: clamp(0.45rem, 0.75vw, 0.55rem);
+  letter-spacing: 0.08em;
+  background: var(--amber-lo);
+  border: 1px solid rgba(240,180,41,0.2);
+  padding: 0.08rem 0.35rem;
+  border-radius: 2px;
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 8 — CLOUDWATCH LOGS
+   ═══════════════════════════════════════ */
+#s8 .content { width: 100%; max-width: 840px; }
+
+#s8 .cw-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.6rem, 1.5vw, 1.1rem);
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+#s8 .log-terminal {
+  background: var(--void);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#s8 .terminal-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rim);
+  padding: clamp(0.22rem, 0.5vh, 0.35rem) clamp(0.5rem, 1vw, 0.75rem);
+  font-size: clamp(0.44rem, 0.72vw, 0.54rem);
+  color: var(--text-xd);
+  letter-spacing: 0.1em;
+}
+
+#s8 .log-lines {
+  padding: clamp(0.4rem, 0.9vh, 0.6rem) clamp(0.5rem, 1vw, 0.75rem);
+}
+
+#s8 .log-line {
+  font-size: clamp(0.48rem, 0.8vw, 0.58rem);
+  color: var(--text-dim);
+  line-height: 1.6;
+  display: flex;
+  gap: 0.5rem;
+}
+#s8 .log-line .ts  { color: var(--text-xd); flex-shrink: 0; }
+#s8 .log-line .lvl-info  { color: var(--blue);  flex-shrink: 0; }
+#s8 .log-line .lvl-warn  { color: var(--amber); flex-shrink: 0; }
+#s8 .log-line .lvl-err   { color: var(--loss);  flex-shrink: 0; }
+#s8 .log-line .msg { color: var(--text-dim); }
+#s8 .log-line .msg .hl   { color: var(--gain); }
+#s8 .log-line .msg .amber { color: var(--amber); }
+
+#s8 .cw-note {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-left: 2px solid var(--amber);
+  border-radius: 0 4px 4px 0;
+  padding: clamp(0.35rem, 0.8vh, 0.55rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-top: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+/* ═══════════════════════════════════════
+   SLIDE 9 — SECURITY & COST
+   ═══════════════════════════════════════ */
+#s9 .content { width: 100%; max-width: 880px; }
+
+#s9 .iam-table {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: clamp(0.4rem, 1vh, 0.65rem);
+}
+
+#s9 .iam-hdr {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1.5fr;
+  padding: clamp(0.25rem, 0.55vh, 0.38rem) clamp(0.65rem, 1.3vw, 1rem);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rim);
+}
+
+#s9 .iam-row {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1.5fr;
+  padding: clamp(0.22rem, 0.48vh, 0.34rem) clamp(0.65rem, 1.3vw, 1rem);
+  border-bottom: 1px solid var(--rim);
+  align-items: center;
+  gap: 0.4rem;
+}
+#s9 .iam-row:last-child { border-bottom: none; }
+#s9 .iam-row:nth-child(odd) { background: rgba(255,255,255,0.01); }
+
+#s9 .iam-perm { font-size: clamp(0.5rem, 0.85vw, 0.6rem); color: var(--blue); }
+#s9 .iam-scope { font-size: clamp(0.5rem, 0.85vw, 0.6rem); color: var(--text-xd); letter-spacing: 0.04em; }
+#s9 .iam-use { font-size: clamp(0.5rem, 0.85vw, 0.6rem); color: var(--text-dim); }
+
+#s9 .sec-cost-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.5rem, 1.2vw, 0.85rem);
+}
+
+#s9 .cost-card {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  padding: clamp(0.4rem, 0.9vh, 0.6rem) clamp(0.6rem, 1.2vw, 0.9rem);
+}
+
+#s9 .cost-row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: clamp(0.1rem, 0.25vh, 0.18rem) 0;
+  border-bottom: 1px solid var(--rim);
+  gap: 0.5rem;
+}
+#s9 .cost-row-item:last-child { border-bottom: none; }
+#s9 .cr-label { font-size: clamp(0.45rem, 0.78vw, 0.58rem); color: var(--text-dim); }
+#s9 .cr-val   { font-size: clamp(0.45rem, 0.78vw, 0.58rem); color: var(--gain); white-space: nowrap; }
+#s9 .cr-val.amber { color: var(--amber); }
+
+/* ═══════════════════════════════════════
+   SLIDE 10 — SUMMARY
+   ═══════════════════════════════════════ */
+#s10 {
+  background: radial-gradient(ellipse 70% 50% at 50% 75%, rgba(240,180,41,0.04) 0%, transparent 60%);
+}
+
+#s10 .content { width: 100%; max-width: 920px; }
+
+#s10 .sum-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: clamp(0.5rem, 1.2vw, 0.9rem);
+  margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+}
+
+#s10 .sum-card {
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#s10 .sum-hdr {
+  padding: clamp(0.28rem, 0.6vh, 0.42rem) clamp(0.6rem, 1.2vw, 0.9rem);
+  border-bottom: 1px solid var(--rim);
+  font-size: clamp(0.48rem, 0.82vw, 0.58rem);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+#s10 .sum-card:nth-child(1) .sum-hdr { color: var(--gain); }
+#s10 .sum-card:nth-child(2) .sum-hdr { color: var(--loss); }
+#s10 .sum-card:nth-child(3) .sum-hdr { color: var(--blue); }
+
+#s10 .sum-body {
+  padding: clamp(0.4rem, 0.9vh, 0.65rem) clamp(0.6rem, 1.2vw, 0.9rem);
+}
+
+#s10 .sum-item {
+  font-size: clamp(0.55rem, 0.9vw, 0.65rem);
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-bottom: clamp(0.18rem, 0.4vh, 0.3rem);
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+#s10 .sum-card:nth-child(1) .sum-item::before { content: '[+]'; color: var(--gain); flex-shrink: 0; font-size: 0.78em; }
+#s10 .sum-card:nth-child(2) .sum-item::before { content: '[!]'; color: var(--loss); flex-shrink: 0; font-size: 0.78em; }
+#s10 .sum-card:nth-child(3) .sum-item::before { content: '[>]'; color: var(--blue); flex-shrink: 0; font-size: 0.78em; }
+
+#s10 .status-bar-mimic {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(0.28rem, 0.6vh, 0.42rem) clamp(0.75rem, 1.5vw, 1.1rem);
+  background: var(--void);
+  border: 1px solid var(--rim);
+  border-radius: 4px;
+}
+
+#s10 .sb-items {
+  display: flex;
+  gap: clamp(0.75rem, 1.8vw, 1.4rem);
+  align-items: center;
+}
+
+#s10 .sb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: clamp(0.44rem, 0.75vw, 0.55rem);
+  letter-spacing: 0.1em;
+}
+#s10 .sb-item .sb-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gain); box-shadow: 0 0 5px var(--gain); animation: sys-pulse 2.5s ease-in-out infinite; flex-shrink: 0; }
+#s10 .sb-item .k { color: var(--text-xd); font-weight: 600; }
+#s10 .sb-item .v { color: var(--gain); }
+#s10 .sb-ver { font-size: clamp(0.4rem, 0.68vw, 0.52rem); color: var(--text-xd); letter-spacing: 0.08em; }
+
+/* === BREAKPOINTS === */
+@media (max-height: 700px) { .slide { padding: clamp(1rem, 2.5vw, 2rem); } }
+@media (max-height: 600px) { #s1 .hero-title { font-size: clamp(1.2rem, 3.2vw, 2.4rem); } }
+@media (max-height: 500px) { .slide-title { font-size: clamp(0.9rem, 2.2vw, 1.6rem); } }
+
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<div class="presentation" id="pres">
+
+<!-- ═══════════════════════════════════════
+     SLIDE 1 — TITLE
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s1">
+  <div class="mark a1">
+    <div class="mark-ring"></div>
+    <span class="mark-glyph">4</span>
+  </div>
+  <div class="eyebrow a2" style="">AWS MINI PROJECT · PRESENTATION</div>
+  <h1 class="hero-title a3" style="">4RCH3R — <span class="hl">AWS INTEGRATION</span></h1>
+  <div class="sub a4" style="">Investment Portfolio Tracker · Cloud Deployment</div>
+  <div class="chips a5">
+    <span class="chip chip-amber">AWS Bedrock</span>
+    <span class="chip chip-amber">SSM Parameter Store</span>
+    <span class="chip chip-amber">SES</span>
+    <span class="chip chip-amber">Lambda</span>
+    <span class="chip chip-amber">CloudWatch</span>
+    <span class="chip chip-dim">Tony Verin</span>
+  </div>
+  <div class="live-row a6">
+    <div class="sys-dot"></div>
+    DEPLOYED · EC2 US-EAST-1
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 2 — THE PROBLEM
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="content">
+    <div class="slide-tag a1">02 — THE PROBLEM</div>
+    <h2 class="slide-title a2" style="">Why AWS was needed</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="prob-grid a3">
+      <div class="prob-card">
+        <div class="prob-num">01</div>
+        <div class="prob-title" style="">No cloud access</div>
+        <div class="prob-desc" style="">FastAPI ran on localhost. Portfolio data was unreachable from any other device or network. The app only worked on one machine.</div>
+      </div>
+      <div class="prob-card">
+        <div class="prob-num">02</div>
+        <div class="prob-title" style="">No observability</div>
+        <div class="prob-desc" style="">If the app crashed at 3am, nobody would know until manually checking. No logs, no alerts, no visibility into what was happening.</div>
+      </div>
+      <div class="prob-card">
+        <div class="prob-num">03</div>
+        <div class="prob-title" style="">No automation</div>
+        <div class="prob-desc" style="">Portfolio snapshots only recorded when a user opened the app. Miss a day, miss chart data forever. No scheduled jobs possible.</div>
+      </div>
+    </div>
+    <div class="why-box a4">
+      <div class="lbl" style="">WHY AWS OVER HEROKU / RAILWAY / RENDER</div>
+      <div class="why-items">
+        <div class="why-item">EC2 + SSM + Lambda + CloudWatch in free tier — Bedrock ~$0.25/mo pay-per-use</div>
+        <div class="why-item">Native Bedrock + IAM — no third-party keys</div>
+        <div class="why-item">SSM Parameter Store built-in for secrets</div>
+        <div class="why-item">CloudWatch included in IAM role scope</div>
+        <div class="why-item">Lambda + EventBridge — no paid cron add-ons</div>
+        <div class="why-item">Industry standard — real learning value</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 3 — ARCHITECTURE
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="content">
+    <div class="slide-tag a1">03 — ARCHITECTURE</div>
+    <h2 class="slide-title a2" style="">Full system flow</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="diagram a3">
+      <!-- Startup row -->
+      <div class="flow-row">
+        <div class="fn fn-amber"><div class="nl">SSM</div><div class="na">startup secrets</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-blue"><div class="nl">FastAPI</div><div class="na">EC2 t3.micro</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-amber"><div class="nl">CloudWatch</div><div class="na">watchtower handler</div></div>
+      </div>
+      <!-- Main request row -->
+      <div class="flow-row" style="margin-top:clamp(0.15rem,0.35vh,0.25rem)">
+        <div class="fn"><div class="nl">Browser</div><div class="na">chat UI</div></div>
+        <div class="fa">→</div>
+        <div class="fn fn-blue"><div class="nl">Nginx</div><div class="na">reverse proxy</div></div>
+        <div class="fa">→</div>
+        <div class="fn fn-blue"><div class="nl">FastAPI</div><div class="na">/api/chat</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-amber"><div class="nl">Bedrock</div><div class="na">Claude 3.5 Haiku</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-amber"><div class="nl">Guardrails</div><div class="na">content filter</div></div>
+      </div>
+      <!-- Fork row -->
+      <div class="fork-wrap" style="margin-top:clamp(0.1rem,0.3vh,0.2rem)">
+        <div class="fork-branch">
+          <div class="fork-badge fb-red">BLOCKED</div>
+          <div class="fa fa-red">↓</div>
+          <div class="fn fn-red" style="min-width:clamp(4rem,8vw,6.5rem)"><div class="nl">HTTP 400</div><div class="na">content blocked msg</div></div>
+        </div>
+        <div class="or-sep">OR</div>
+        <div class="fork-branch">
+          <div class="fork-badge fb-gain">ALLOWED</div>
+          <div class="fa fa-gain">↓</div>
+          <div class="fn fn-gain" style="min-width:clamp(4rem,8vw,6.5rem)"><div class="nl">AI Response</div><div class="na">returned to user</div></div>
+        </div>
+      </div>
+      <!-- Lambda row -->
+      <div class="flow-row" style="margin-top:clamp(0.15rem,0.35vh,0.25rem)">
+        <div class="fn fn-amber"><div class="nl">EventBridge</div><div class="na">cron 4pm ET weekdays</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-amber"><div class="nl">Lambda</div><div class="na">daily-close trigger</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-blue"><div class="nl">/api/internal</div><div class="na">snapshot all portfolios</div></div>
+        <div class="fa fa-amber">→</div>
+        <div class="fn fn-amber"><div class="nl">SES</div><div class="na">daily summary email</div></div>
+      </div>
+    </div>
+    <div class="arch-note a4" style="">
+      All AWS authentication via <span class="hl">IAM Role attached to EC2</span> — no access keys stored anywhere
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 4 — AWS BEDROCK
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="content">
+    <div class="slide-tag a1">04 — AWS BEDROCK</div>
+    <h2 class="slide-title a2" style="">AI chat backend</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="two-col a3">
+      <div>
+        <div class="col-head">WHAT / WHY</div>
+        <div class="card card-pad" style="border-radius:6px;margin-bottom:clamp(0.35rem,0.8vh,0.55rem)">
+          <div class="lbl" style="margin-bottom: 0.3rem;">THE PROBLEM</div>
+          <div class="val val-dim" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem); line-height: 1.5;">LM Studio is a desktop GUI app — it cannot run in the cloud. A cloud-native LLM was needed to replace it.</div>
+        </div>
+        <div class="col-head" style="margin-top:clamp(0.35rem,0.8vh,0.55rem)">BEDROCK VS 3RD-PARTY LLM API</div>
+        <div class="card card-pad" style="border-radius:6px">
+          <div class="stat-row"><span class="stat-lbl" style="">API key required</span><span class="stat-val loss" style="">3rd-party: yes</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Rate limits</span><span class="stat-val loss" style="">3rd-party: hard daily caps</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Third-party dependency</span><span class="stat-val loss" style="">3rd-party: yes</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Auth method</span><span class="stat-val gain" style="">Bedrock: IAM Role</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Rate limit</span><span class="stat-val gain" style="">Bedrock: high service quotas</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Guardrails support</span><span class="stat-val gain" style="">Bedrock: native</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="col-head">IMPLEMENTATION</div>
+        <div class="card card-pad" style="border-radius:6px;margin-bottom:clamp(0.35rem,0.8vh,0.55rem)">
+          <div class="stat-row"><span class="stat-lbl" style="">Model</span><span class="stat-val amber" style="">Claude 3.5 Haiku</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Model ID</span><span class="stat-val blue" style="font-size: 0.85em;">anthropic.claude-3-5-haiku-20241022-v1:0</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">SDK call</span><span class="stat-val blue" style="">boto3.client("bedrock-runtime").converse()</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Blocking</span><span class="stat-val gain" style="">asyncio run_in_executor</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Cost: input</span><span class="stat-val" style="">$0.80 / 1M tokens</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Cost: output</span><span class="stat-val" style="">$4.00 / 1M tokens</span></div>
+          <div class="stat-row"><span class="stat-lbl" style="">Personal use cost</span><span class="stat-val gain" style="">&lt; $0.01 / day</span></div>
+        </div>
+        <div class="bottom-bar a4">
+          <div class="lbl" style="margin-bottom: 0.28rem;">IAM PERMISSION</div>
+          <div class="val val-dim" style="font-size: clamp(0.52rem, 0.88vw, 0.62rem);"><span class="pill pill-blue">bedrock:InvokeModel</span> scoped to the exact Claude 3.5 Haiku ARN only — no wildcard access</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 5 — BEDROCK GUARDRAILS (concise)
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="content">
+    <div class="slide-tag a1">05 — BEDROCK GUARDRAILS</div>
+    <h2 class="slide-title a2" style="">AI content moderation</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="guard-cols a3">
+      <div class="card card-pad" style="border-radius:6px">
+        <div class="gc-head">Content Filters</div>
+        <div class="gc-item" style="">Hate speech → HIGH</div>
+        <div class="gc-item" style="">Insults → HIGH</div>
+        <div class="gc-item" style="">Sexual content → HIGH</div>
+        <div class="gc-item" style="">Violence → HIGH</div>
+        <div class="gc-item" style="">Misconduct → HIGH</div>
+        <div class="gc-item" style="">Prompt attack → HIGH</div>
+      </div>
+      <div class="card card-pad" style="border-radius:6px">
+        <div class="gc-head">Denied Topics</div>
+        <div class="gc-item" style="">Illegal financial activity</div>
+        <div class="gc-item" style="">Market manipulation</div>
+        <div class="gc-item" style="">Insider trading strategies</div>
+        <div class="gc-head" style="margin-top:clamp(0.4rem,0.9vh,0.6rem)">Data Redaction</div>
+        <div class="gc-item" style="">Credit card numbers</div>
+        <div class="gc-item" style="">Bank account numbers</div>
+      </div>
+      <div class="card card-pad" style="border-radius:6px">
+        <div class="gc-head">How It Works</div>
+        <div class="gc-item" style="">Applied before model sees input</div>
+        <div class="gc-item" style="">Applied after model output</div>
+        <div class="gc-item" style=""><span class="pill pill-dim" style="font-size:0.85em">stop_reason == "guardrail_intervened"</span></div>
+        <div class="gc-item" style="">Routes HTTP 400 to frontend</div>
+        <div class="gc-item" style="">User sees clean message</div>
+        <div class="gc-item" style="">Blocks logged via FastAPI watchtower</div>
+      </div>
+    </div>
+    <div class="guard-how a4">
+      <div class="gh-item" style="">Guardrail ID: <span class="pill" style="margin-left:0.3rem">6n8c34ilb7vt</span></div>
+      <div class="gh-item" style="">Version: <span class="pill" style="margin-left:0.3rem">1</span></div>
+      <div class="gh-item" style="">Stored in SSM as SecureString</div>
+      <div class="gh-item" style="">IAM: <span class="pill pill-blue" style="margin-left:0.3rem">bedrock:ApplyGuardrail</span> scoped to exact ARN</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 6 — SSM PARAMETER STORE
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="content">
+    <div class="slide-tag a1">06 — SSM PARAMETER STORE</div>
+    <h2 class="slide-title a2" style="">Secrets without a .env file</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="ssm-layout a3">
+      <div>
+        <div class="params-table">
+          <div class="params-table-head">
+            <div class="lbl" style="">PARAMETER PATH</div>
+            <div class="lbl" style="">TYPE</div>
+          </div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/ALERT_EMAIL</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/ALERT_ENABLED</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/ALERT_THRESHOLD_PCT</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/BEDROCK_GUARDRAIL_ID</div><div class="param-type secure">SecureString</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/BEDROCK_GUARDRAIL_VERSION</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/BEDROCK_MODEL</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/BEDROCK_REGION</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/CLOUDWATCH_LOG_GROUP</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/CORS_ORIGINS</div><div class="param-type">String</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/INTERNAL_API_KEY</div><div class="param-type secure">SecureString</div></div>
+          <div class="param-row"><div class="param-name" style="">/investment-manager/MONGO_URI</div><div class="param-type secure">SecureString</div></div>
+        </div>
+        <div class="ssm-note" style="">SecureString parameters are encrypted at rest using AWS KMS. If the server is compromised, no credentials are exposed from disk. <span class="pill pill-blue">INTERNAL_API_KEY</span> authenticates the Lambda → FastAPI internal endpoint. <span class="pill pill-blue">CORS_ORIGINS</span> controls which domains can call the API.</div>
+      </div>
+      <div>
+        <div class="code-block">
+          <div class="c-comment"># backend/main.py — runs before any routes load</div>
+          <div>&nbsp;</div>
+          <div><span class="c-kw">def</span> <span class="c-fn">_load_ssm_secrets</span>():</div>
+          <div>&nbsp; ssm = boto3.client(</div>
+          <div>&nbsp;&nbsp;&nbsp; <span class="c-str">"ssm"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp; region_name=os.getenv(<span class="c-str">"BEDROCK_REGION"</span>)</div>
+          <div>&nbsp; )</div>
+          <div>&nbsp; kwargs = {</div>
+          <div>&nbsp;&nbsp;&nbsp; <span class="c-str">"Path"</span>: <span class="c-str">"/investment-manager/"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp; <span class="c-str">"WithDecryption"</span>: <span class="c-kw">True</span></div>
+          <div>&nbsp; }</div>
+          <div>&nbsp; <span class="c-kw">while</span> <span class="c-kw">True</span>:</div>
+          <div>&nbsp;&nbsp;&nbsp; resp = ssm.get_parameters_by_path(**kwargs)</div>
+          <div>&nbsp;&nbsp;&nbsp; <span class="c-kw">for</span> p <span class="c-kw">in</span> resp[<span class="c-str">"Parameters"</span>]:</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; key = p[<span class="c-str">"Name"</span>].split(<span class="c-str">"/"</span>)[-1]</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; os.environ[key] = p[<span class="c-str">"Value"</span>]</div>
+          <div>&nbsp;&nbsp;&nbsp; <span class="c-kw">if</span> <span class="c-str">"NextToken"</span> <span class="c-kw">not in</span> resp: <span class="c-kw">break</span></div>
+          <div>&nbsp;&nbsp;&nbsp; kwargs[<span class="c-str">"NextToken"</span>] = resp[<span class="c-str">"NextToken"</span>]</div>
+          <div>&nbsp;</div>
+          <div>_load_ssm_secrets()  <span class="c-comment"># called at module load</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 7 — SES + LAMBDA + EVENTBRIDGE
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="content">
+    <div class="slide-tag a1">07 — SES · LAMBDA · EVENTBRIDGE</div>
+    <h2 class="slide-title a2" style="">Alerts and automation</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="svc-grid a3">
+      <div class="svc-card">
+        <div class="svc-hdr">
+          <div class="svc-name">AMAZON SES</div>
+          <div class="svc-cat">Simple Email Service</div>
+        </div>
+        <div class="svc-body" style="">
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">3,000 emails/month free forever from EC2</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">No SMTP server — boto3.client("ses")</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Real-time threshold alert: fires when daily change exceeds configurable % — at most once per portfolio per day</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Daily summary email: every portfolio's value + daily change in one message</div>
+          <div style="margin-top:0.4rem;font-size:clamp(0.52rem,0.85vw,0.62rem);color:var(--text-xd);">EXAMPLE SUBJECT</div>
+          <div style="font-size:clamp(0.5rem,0.82vw,0.6rem);color:var(--text-dim);margin-top:0.15rem;">[4RCH3R] MyPortfolio — +6.41% (threshold 5.0%)</div>
+        </div>
+      </div>
+      <div class="svc-card">
+        <div class="svc-hdr">
+          <div class="svc-name">AWS LAMBDA</div>
+          <div class="svc-cat">Serverless function</div>
+        </div>
+        <div class="svc-body" style="">
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">1 million free invocations/month forever</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Runtime: Python 3.12</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Calls POST /api/internal/daily-close on EC2 with X-Internal-Key header</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Endpoint snapshots all portfolios and triggers SES daily summary</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Logs visible in CloudWatch</div>
+        </div>
+      </div>
+      <div class="svc-card">
+        <div class="svc-hdr">
+          <div class="svc-name">EVENTBRIDGE</div>
+          <div class="svc-cat">Managed scheduler</div>
+        </div>
+        <div class="svc-body" style="">
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Free for scheduled rules</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">No cron daemon, no server uptime dependency</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Schedule: cron(0 21 ? * MON-FRI *)</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">9pm UTC = 4pm ET (US market close)</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Target: investment-manager-daily-close Lambda</div>
+        </div>
+      </div>
+    </div>
+    <div class="flow-note a4">
+      <div class="fn-step" style=""><span class="svc-tag">EVENTBRIDGE</span> triggers</div>
+      <div class="fn-step" style=""><span class="arrow">→</span><span class="svc-tag">LAMBDA</span> calls</div>
+      <div class="fn-step" style=""><span class="arrow">→</span><span class="svc-tag">FASTAPI</span> snapshots all portfolios</div>
+      <div class="fn-step" style=""><span class="arrow">→</span><span class="svc-tag">SES</span> sends daily email</div>
+      <div class="fn-step" style=""><span class="arrow">→</span><span class="svc-tag">CLOUDWATCH</span> logs everything</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 8 — CLOUDWATCH LOGS
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="content">
+    <div class="slide-tag a1">08 — CLOUDWATCH LOGS</div>
+    <h2 class="slide-title a2" style="">Real-time observability</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="cw-layout a3">
+      <div>
+        <div class="lbl" style="margin-bottom: 0.4rem;">HOW IT WORKS</div>
+        <div class="card card-pad" style="border-radius:6px;margin-bottom:clamp(0.35rem,0.8vh,0.55rem)">
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">watchtower Python library attaches a CloudWatchLogHandler to the root logger</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Every logger.info/warning/error call ships to AWS in real time — no SSH needed</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Log group: /investment-manager/app · stream: fastapi</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Log group name stored in SSM — configurable without code changes</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">5 GB/month free, 10 alarms free — both in free tier</div>
+        </div>
+        <div class="lbl" style="margin-bottom: 0.4rem;">UPTIME ALARM</div>
+        <div class="card card-pad" style="border-radius:6px;">
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Metric: EC2 StatusCheckFailed</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Threshold: &gt;= 1 for 1 data point</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Action: SNS → email alert if instance goes down</div>
+        </div>
+      </div>
+      <div class="log-terminal">
+        <div class="terminal-bar">CLOUDWATCH · /investment-manager/app · stream: fastapi</div>
+        <div class="log-lines">
+          <div class="log-line"><span class="ts">21:00:01</span><span class="lvl-info">INFO</span><span class="msg" style="">SSM: loaded <font color="#00d97e">11</font>&nbsp;secrets from Parameter Store</span></div>
+          <div class="log-line"><span class="ts">21:00:01</span><span class="lvl-info">INFO</span><span class="msg" style="">CloudWatch logging enabled → <span class="amber">/investment-manager/app</span></span></div>
+          <div class="log-line"><span class="ts">21:00:02</span><span class="lvl-info">INFO</span><span class="msg" style="">Application startup complete</span></div>
+          <div class="log-line"><span class="ts">21:00:05</span><span class="lvl-info">INFO</span><span class="msg" style="">Calling AWS Bedrock model <span class="amber">claude-3-5-haiku</span></span></div>
+          <div class="log-line"><span class="ts">21:00:07</span><span class="lvl-info">INFO</span><span class="msg" style="">Bedrock response: <span class="hl">842 tokens</span> in 1.94s</span></div>
+          <div class="log-line"><span class="ts">21:00:09</span><span class="lvl-warn">WARN</span><span class="msg" style="">Guardrail intervened on portfolio <span class="amber">TestPort</span></span></div>
+          <div class="log-line"><span class="ts">21:05:00</span><span class="lvl-info">INFO</span><span class="msg" style="">SES alert sent: <span class="hl">MyPortfolio +6.41%</span></span></div>
+          <div class="log-line"><span class="ts">21:05:01</span><span class="lvl-info">INFO</span><span class="msg" style="">Daily summary sent to <span class="amber">toni7891@gmail.com</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cw-note a4" style="">
+      Before CloudWatch: required SSH + journalctl to see any logs. Now: browse all FastAPI output from the AWS Console without touching the server.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 9 — SECURITY & COST
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s9">
+  <div class="content">
+    <div class="slide-tag a1">09 — SECURITY &amp; COST</div>
+    <h2 class="slide-title a2" style="">IAM role and pricing</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="iam-table a3">
+      <div class="iam-hdr">
+        <div class="lbl" style="">IAM PERMISSION</div>
+        <div class="lbl" style="">SCOPE</div>
+        <div class="lbl" style="">USED BY</div>
+      </div>
+      <div class="iam-row"><div class="iam-perm">ssm:GetParametersByPath</div><div class="iam-scope" style="">/investment-manager/* only</div><div class="iam-use" style="">Startup secrets loader</div></div>
+      <div class="iam-row"><div class="iam-perm">logs:PutLogEvents + Create*</div><div class="iam-scope" style="">/investment-manager/* log groups</div><div class="iam-use" style="">CloudWatch watchtower</div></div>
+      <div class="iam-row"><div class="iam-perm">bedrock:InvokeModel</div><div class="iam-scope" style="">Claude 3.5 Haiku ARN only</div><div class="iam-use" style="">AI chat backend</div></div>
+      <div class="iam-row"><div class="iam-perm">bedrock:ApplyGuardrail</div><div class="iam-scope" style="">Guardrail 6n8c34ilb7vt ARN only</div><div class="iam-use" style="">Content moderation</div></div>
+      <div class="iam-row"><div class="iam-perm">ses:SendEmail + SendRawEmail</div><div class="iam-scope" style="">* (SES default)</div><div class="iam-use" style="">Portfolio alerts + daily summary</div></div>
+    </div>
+    <div class="sec-cost-row a4">
+      <div class="cost-card">
+        <div class="lbl" style="margin-bottom: 0.35rem;">MONTHLY COST BREAKDOWN</div>
+        <div class="cost-row-item"><span class="cr-label" style="">EC2 t3.micro (free tier year 1)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">EC2 t3.micro (after free tier)</span><span class="cr-val amber" style="">$8.50</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">Elastic IP (attached to running instance)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">SSM Parameter Store (standard)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">CloudWatch Logs (free tier 5GB/mo)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">SES (free from EC2, 3K/mo)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">Lambda (1M free invocations/mo)</span><span class="cr-val" style="">$0.00</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">Bedrock (~50 chats/day)</span><span class="cr-val amber" style="">~$0.25</span></div>
+        <div class="cost-row-item"><span class="cr-label" style="">tonyverin.dev domain (Namecheap, 1yr)</span><span class="cr-val amber" style="">$12.98</span></div>
+      </div>
+      <div class="cost-card">
+        <div class="lbl" style="margin-bottom: 0.35rem;">SECURITY PRINCIPLES</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">No access keys on server — IAM Role only</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">No .env file on disk — all secrets in SSM KMS</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Every IAM permission scoped to minimum ARN</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">SSH restricted to one IP via security group</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Internal endpoint protected by shared secret</div>
+        <div class="line-item gain" data-pre="[+]" style="font-size: clamp(0.55rem, 0.9vw, 0.65rem);">Guardrail decisions audited in CloudWatch</div>
+        <div style="margin-top:clamp(0.4rem,0.9vh,0.6rem);padding-top:clamp(0.3rem,0.7vh,0.45rem);border-top:1px solid var(--rim)">
+          <div class="lbl" style="margin-bottom: 0.25rem;">AVOID UNNECESSARY COST</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.52rem, 0.85vw, 0.62rem);">Use Haiku, not Sonnet or Opus</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.52rem, 0.85vw, 0.62rem);">Set max_tokens: 2048 on every request</div>
+          <div class="line-item" data-pre="&gt;" style="font-size: clamp(0.52rem, 0.85vw, 0.62rem);">CloudWatch billing alarm at $5/month</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 10 — SUMMARY
+     ═══════════════════════════════════════ -->
+<div class="slide" id="s10">
+  <div class="content">
+    <div class="slide-tag a1">10 — SUMMARY</div>
+    <h2 class="slide-title a2" style="">Takeaways</h2>
+    <div class="rule a2"><div class="rule-line"></div><div class="rule-glyph">+</div><div class="rule-line"></div></div>
+    <div class="sum-grid a3">
+      <div class="sum-card">
+        <div class="sum-hdr">WHAT I LEARNED</div>
+        <div class="sum-body">
+          <div class="sum-item" style="">SSM Parameter Store is the right place for secrets — not .env files on disk</div>
+          <div class="sum-item" style="">IAM Roles eliminate hardcoded credentials entirely — no keys anywhere</div>
+          <div class="sum-item" style="">CloudWatch + watchtower gives full log visibility without SSH</div>
+          <div class="sum-item" style="">Bedrock Guardrails blocks at infrastructure level — zero application code needed</div>
+          <div class="sum-item" style="">Lambda + EventBridge replaces cron daemons with serverless scheduling</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-hdr">WHAT WAS DIFFICULT</div>
+        <div class="sum-body">
+          <div class="sum-item" style="">SSM pagination — default limit is 10 params, needed NextToken loop</div>
+          <div class="sum-item" style="">IAM policy ARN format for Bedrock models and guardrails</div>
+          <div class="sum-item" style="">guardrailIdentifier vs guardrailVersion API parameter naming</div>
+          <div class="sum-item" style="">Handling guardrail_intervened gracefully in the frontend</div>
+          <div class="sum-item" style="">Nginx 300s timeout config for long AI chat responses</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-hdr">IMPROVE IN PRODUCTION</div>
+        <div class="sum-body">
+          <div class="sum-item" style="">Move to ECS/Fargate — no instance management, true autoscaling</div>
+          <div class="sum-item" style="">CloudWatch alarm when guardrail block rate exceeds 5%</div>
+          <div class="sum-item" style="">SES production access — currently sandbox (verified addresses only)</div>
+          <div class="sum-item" style="">RDS or DynamoDB instead of Atlas for fully-integrated AWS stack</div>
+          <div class="sum-item" style="">WAF in front of ALB for HTTP-layer protection</div>
+        </div>
+      </div>
+    </div>
+    <div class="status-bar-mimic a4">
+      <div class="sb-items">
+        <div class="sb-item"><div class="sb-dot"></div><span class="k">SYSTEM</span><span class="v">ONLINE</span></div>
+        <div class="sb-item"><span class="k">SERVICES</span><span class="v">EC2 · BEDROCK · SSM · SES · LAMBDA · CLOUDWATCH</span></div>
+        <div class="sb-item"><span class="k">REGION</span><span class="v">US-EAST-1</span></div>
+      </div>
+      <div class="sb-ver" style="">4RCH3R · TONY VERIN · 2026</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /presentation -->
+
+<!-- NAV -->
+<div class="nav-dots" id="navDots"></div>
+<div class="slide-counter" id="counter">01 / 10</div>
+
+<button class="edit-btn" id="editBtn">EDIT</button>
+
+<script>
+/* === PRESENTATION ENGINE === */
+const slides   = Array.from(document.querySelectorAll('.slide'));
+const dotsWrap = document.getElementById('navDots');
+const counter  = document.getElementById('counter');
+const editBtn  = document.getElementById('editBtn');
+let cur = 0, editMode = false;
+
+/* Build nav dots */
+slides.forEach((_, i) => {
+  const d = document.createElement('button');
+  d.className = 'nav-dot' + (i === 0 ? ' active' : '');
+  d.setAttribute('aria-label', 'Slide ' + (i + 1));
+  d.addEventListener('click', () => goTo(i));
+  dotsWrap.appendChild(d);
+});
+
+function goTo(n) {
+  if (n === cur) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('prev');
+  const oldCur = cur;
+  cur = Math.max(0, Math.min(n, slides.length - 1));
+  setTimeout(() => slides[oldCur].classList.remove('prev'), 400);
+  slides[cur].classList.add('active');
+  dotsWrap.querySelectorAll('.nav-dot').forEach((d, i) =>
+    d.classList.toggle('active', i === cur));
+  counter.textContent =
+    String(cur + 1).padStart(2, '0') + ' / ' + String(slides.length).padStart(2, '0');
+}
+
+function next() { if (cur < slides.length - 1) goTo(cur + 1); }
+function prev() { if (cur > 0) goTo(cur - 1); }
+
+slides[0].classList.add('active');
+
+/* Keyboard */
+document.addEventListener('keydown', e => {
+  if (editMode && e.target !== document.body) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft')                    { e.preventDefault(); prev(); }
+  if (e.key === 'Escape' && editMode)            toggleEdit();
+  if (e.key === 'e' && !editMode && document.activeElement === document.body) toggleEdit();
+});
+
+/* Swipe */
+let tx = 0;
+document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  if (Math.abs(dx) > 40) dx < 0 ? next() : prev();
+});
+
+/* === INLINE EDITING === */
+const EDITABLE = 'h1,h2,h3,.slide-title,.hero-title,.sub,.eyebrow,.prob-title,.prob-desc,.val,.prob-desc,.line-item,.sum-item,.gc-item,.gh-item,.stat-lbl,.stat-val,.arch-note,.ssm-note,.cw-note,.svc-body,.fn-step,.s-body,.lbl,.param-name,.log-line .msg,.cr-label,.cr-val,.iam-use,.iam-scope,.sb-ver';
+
+function toggleEdit() {
+  editMode = !editMode;
+  editBtn.textContent  = editMode ? 'SAVE' : 'EDIT';
+  editBtn.classList.toggle('on', editMode);
+  slides.forEach(slide => {
+    slide.querySelectorAll(EDITABLE).forEach(el => {
+      el.contentEditable = editMode ? 'true' : 'false';
+      el.style.outline      = editMode ? '1px dashed rgba(240,180,41,0.22)' : '';
+      el.style.borderRadius = editMode ? '2px' : '';
+    });
+  });
+  if (!editMode) save();
+}
+
+function save() {
+  try {
+    const d = {};
+    slides.forEach((s, i) => { d[i] = s.innerHTML; });
+    localStorage.setItem('archer-deck-v4', JSON.stringify(d));
+  } catch(e) {}
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem('archer-deck-v4');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    slides.forEach((s, i) => { if (d[i]) s.innerHTML = d[i]; });
+  } catch(e) {}
+}
+
+editBtn.addEventListener('click', toggleEdit);
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (editMode) toggleEdit(); }
+});
+
+load();
+</script>
+
+
+</body></html>

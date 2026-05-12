@@ -1920,6 +1920,13 @@ a { color: var(--amber); }
   font-variant-numeric: tabular-nums;
 }
 
+.trades-sep {
+  color: var(--text-xd);
+  font-size: 10px;
+  opacity: 0.35;
+  margin: 0 2px;
+}
+
 .trades-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
