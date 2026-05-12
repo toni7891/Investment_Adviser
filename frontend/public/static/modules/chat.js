@@ -47,7 +47,10 @@ export async function handleSendMessage() {
     const data = await response.json();
     document.getElementById(loadingId)?.remove();
     if (!response.ok) {
-      addChatMessage(`Error: ${data.detail || "AI request failed."}`, false);
+      const msg = data.detail === "guardrail_intervened"
+        ? "That message was blocked by the content policy."
+        : `Error: ${data.detail || "AI request failed."}`;
+      addChatMessage(msg, false);
     } else {
       addChatMessage(data.response, false);
     }

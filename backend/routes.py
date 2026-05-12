@@ -322,8 +322,10 @@ LM_STUDIO_MODEL   = os.getenv("LM_STUDIO_MODEL", "*")
 OLLAMA_API_URL    = os.getenv("OLLAMA_API_URL", "http://localhost:11434/v1/chat/completions")
 OLLAMA_MODEL      = os.getenv("OLLAMA_MODEL", "llama3")
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
-BEDROCK_MODEL     = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
-BEDROCK_REGION    = os.getenv("BEDROCK_REGION", "us-east-1")
+BEDROCK_MODEL             = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+BEDROCK_REGION            = os.getenv("BEDROCK_REGION", "us-east-1")
+BEDROCK_GUARDRAIL_ID      = os.getenv("BEDROCK_GUARDRAIL_ID", "")
+BEDROCK_GUARDRAIL_VERSION = os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
 SSL_VERIFY        = os.getenv("SSL_VERIFY", "true").lower() != "false"
 
 # ─── SES alert configuration ──────────────────────────────────────────────────
@@ -368,20 +370,32 @@ async def call_ai_backend(user_message: str) -> dict:
         def _invoke_bedrock():
             client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
             full_message = f"{AI_SYSTEM_PROMPT}\n\n{user_message}"
-            response = client.converse(
-                modelId=BEDROCK_MODEL,
-                messages=[{"role": "user", "content": [{"text": full_message}]}],
-                inferenceConfig={"maxTokens": 2048},
-            )
-            return response["output"]["message"]["content"][0]["text"]
+            kwargs: dict = {
+                "modelId":        BEDROCK_MODEL,
+                "messages":       [{"role": "user", "content": [{"text": full_message}]}],
+                "inferenceConfig": {"maxTokens": 2048},
+            }
+            if BEDROCK_GUARDRAIL_ID:
+                kwargs["guardrailConfig"] = {
+                    "guardrailIdentifier": BEDROCK_GUARDRAIL_ID,
+                    "guardrailVersion":    BEDROCK_GUARDRAIL_VERSION,
+                    "trace":               "enabled",
+                }
+            response   = client.converse(**kwargs)
+            stop_reason = response.get("stopReason", "")
+            if stop_reason == "guardrail_intervened":
+                return {"__guardrail_blocked__": True}
+            return {"text": response["output"]["message"]["content"][0]["text"]}
 
         logger.info("Calling AWS Bedrock model %s in %s", BEDROCK_MODEL, BEDROCK_REGION)
         try:
-            reply_text = await asyncio.get_event_loop().run_in_executor(None, _invoke_bedrock)
+            result = await asyncio.get_event_loop().run_in_executor(None, _invoke_bedrock)
         except Exception as e:
             logger.error("AWS Bedrock invocation failed: %s", e, exc_info=True)
             raise HTTPException(status_code=502, detail=f"AWS Bedrock error: {e}")
-        return {"choices": [{"message": {"content": reply_text}}]}
+        if result.get("__guardrail_blocked__"):
+            raise HTTPException(status_code=400, detail="guardrail_intervened")
+        return {"choices": [{"message": {"content": result["text"]}}]}
 
     # ── OpenAI-compatible branch (LM Studio / Groq / Ollama) ─────────────────
     logger.info("Calling AI backend at %s", AI_API_URL)
