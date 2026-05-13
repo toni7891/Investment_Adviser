@@ -369,10 +369,10 @@ async def call_ai_backend(user_message: str) -> dict:
 
         def _invoke_bedrock():
             client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
-            full_message = f"{AI_SYSTEM_PROMPT}\n\n{user_message}"
             kwargs: dict = {
-                "modelId":        BEDROCK_MODEL,
-                "messages":       [{"role": "user", "content": [{"text": full_message}]}],
+                "modelId":         BEDROCK_MODEL,
+                "system":          [{"text": AI_SYSTEM_PROMPT}],
+                "messages":        [{"role": "user", "content": [{"text": user_message}]}],
                 "inferenceConfig": {"maxTokens": 2048},
             }
             if BEDROCK_GUARDRAIL_ID:
