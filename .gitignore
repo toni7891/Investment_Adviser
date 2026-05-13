@@ -1,4 +1,5 @@
 .env
+.playwright-mcp/
 node_modules
 old_styles
 old_js
