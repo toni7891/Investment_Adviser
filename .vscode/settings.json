@@ -1,0 +1,27 @@
+{
+  "yaml.customTags": [
+    "!And sequence",
+    "!If sequence",
+    "!If mapping",
+    "!Not sequence",
+    "!Equals sequence",
+    "!Or sequence",
+    "!FindInMap sequence",
+    "!Base64 scalar",
+    "!Cidr sequence",
+    "!Ref scalar",
+    "!Sub scalar",
+    "!Sub sequence",
+    "!GetAtt scalar",
+    "!GetAtt sequence",
+    "!GetAZs scalar",
+    "!ImportValue scalar",
+    "!ImportValue mapping",
+    "!Select sequence",
+    "!Split sequence",
+    "!Join sequence",
+    "!Condition scalar"
+  ],
+  "yaml.validate": true,
+  "yaml.schemaStore.enable": false
+}

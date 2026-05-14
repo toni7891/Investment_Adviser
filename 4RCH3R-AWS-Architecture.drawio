@@ -1,0 +1,168 @@
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <!-- ── USER / INTERNET ─────────────────────────────────────── -->
+    <mxCell id="10" value="&lt;b&gt;User&lt;/b&gt;&lt;br&gt;Browser&lt;br&gt;tonyverin.dev" style="rounded=1;fillColor=#232F3E;strokeColor=#000000;fontColor=#ffffff;fontSize=10;whiteSpace=wrap;html=1;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="30" y="360" width="120" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- ── VPC ─────────────────────────────────────────────────── -->
+    <mxCell id="20" value="&lt;b style='font-size:12px'&gt;VPC — us-east-1&lt;/b&gt;" style="swimlane;startSize=30;fillColor=#FFF9E6;strokeColor=#d6b50a;strokeWidth=2;fontStyle=1;fontSize=11;rounded=1;arcSize=2;spacingTop=2;html=1;" vertex="1" parent="1">
+      <mxGeometry x="200" y="40" width="720" height="790" as="geometry" />
+    </mxCell>
+
+    <!-- ── PUBLIC SUBNET ───────────────────────────────────────── -->
+    <mxCell id="21" value="&lt;b&gt;Public Subnet&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#E8F5E2;strokeColor=#3F8624;strokeWidth=1.5;fontStyle=1;fontSize=10;rounded=1;arcSize=2;html=1;" vertex="1" parent="20">
+      <mxGeometry x="30" y="50" width="660" height="710" as="geometry" />
+    </mxCell>
+
+    <!-- ── SECURITY GROUP ──────────────────────────────────────── -->
+    <mxCell id="22" value="&lt;b&gt;Security Group&lt;/b&gt;  ·  SSH: 1 IP only  ·  HTTP 80 / HTTPS 443: 0.0.0.0/0" style="swimlane;startSize=30;fillColor=#FCE8E6;strokeColor=#b85450;strokeWidth=1.5;fontStyle=0;fontSize=9;rounded=1;arcSize=2;html=1;" vertex="1" parent="21">
+      <mxGeometry x="30" y="40" width="600" height="360" as="geometry" />
+    </mxCell>
+
+    <!-- ── EC2 ─────────────────────────────────────────────────── -->
+    <mxCell id="30" value="&lt;b style='font-size:11px'&gt;EC2 t3.micro&lt;/b&gt;&lt;br&gt;&lt;span style='color:#FFE0A0;font-size:9px'&gt;Amazon Linux 2&lt;/span&gt;&lt;br&gt;&lt;br&gt;&lt;span style='font-size:9px'&gt;▸ Nginx (reverse proxy)&lt;br&gt;▸ FastAPI + uvicorn&lt;br&gt;▸ pymongo client&lt;br&gt;▸ watchtower log handler&lt;/span&gt;" style="rounded=1;fillColor=#ED7100;strokeColor=#CC5500;fontColor=#ffffff;fontSize=10;verticalAlign=top;spacingTop=8;whiteSpace=wrap;html=1;" vertex="1" parent="22">
+      <mxGeometry x="30" y="50" width="265" height="265" as="geometry" />
+    </mxCell>
+
+    <!-- ── IAM ROLE ────────────────────────────────────────────── -->
+    <mxCell id="31" value="&lt;b style='font-size:10px'&gt;IAM Role (attached to EC2)&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;ssm:GetParametersByPath&lt;br&gt;logs:PutLogEvents + CreateLogGroup&lt;br&gt;bedrock:InvokeModel&lt;br&gt;bedrock:ApplyGuardrail&lt;br&gt;ses:SendEmail + SendRawEmail&lt;/span&gt;" style="rounded=1;fillColor=#232F3E;strokeColor=#555555;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="22">
+      <mxGeometry x="330" y="50" width="240" height="160" as="geometry" />
+    </mxCell>
+
+    <!-- ── ELASTIC IP ──────────────────────────────────────────── -->
+    <mxCell id="32" value="&lt;b&gt;Elastic IP&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;Static public IP · Free while instance running&lt;/span&gt;" style="rounded=1;fillColor=#F0A30A;strokeColor=#BD7000;fontColor=#ffffff;fontSize=9;whiteSpace=wrap;html=1;" vertex="1" parent="22">
+      <mxGeometry x="330" y="240" width="240" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- ── AWS MANAGED SERVICES ───────────────────────────────── -->
+
+    <!-- SSM Parameter Store -->
+    <mxCell id="40" value="&lt;b&gt;SSM Parameter Store&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;/investment-manager/*&lt;br&gt;11 params · 4 SecureString (KMS encrypted)&lt;/span&gt;" style="rounded=1;fillColor=#E05243;strokeColor=#B03020;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="80" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- CloudWatch Logs -->
+    <mxCell id="41" value="&lt;b&gt;CloudWatch Logs&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;/investment-manager/app&lt;br&gt;stream: fastapi · 5 GB/mo free tier&lt;/span&gt;" style="rounded=1;fillColor=#E05243;strokeColor=#B03020;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="200" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- CloudWatch Alarm -->
+    <mxCell id="42" value="&lt;b&gt;CloudWatch Alarm&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;EC2 StatusCheckFailed&lt;br&gt;&gt;= 1 for 1 data point&lt;/span&gt;" style="rounded=1;fillColor=#E05243;strokeColor=#B03020;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="320" width="210" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- SNS -->
+    <mxCell id="43" value="&lt;b&gt;SNS Topic&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;Uptime down alert email&lt;/span&gt;" style="rounded=1;fillColor=#E05243;strokeColor=#B03020;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1270" y="320" width="170" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- AWS Bedrock -->
+    <mxCell id="44" value="&lt;b&gt;AWS Bedrock&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;Claude 3.5 Haiku&lt;br&gt;boto3 converse() · ~$0.25/mo&lt;/span&gt;" style="rounded=1;fillColor=#01A88D;strokeColor=#007A65;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="445" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- Bedrock Guardrails -->
+    <mxCell id="45" value="&lt;b&gt;Bedrock Guardrails&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;ID: 6n8c34ilb7vt · Version 1&lt;br&gt;Content filters · Denied topics · Redaction&lt;/span&gt;" style="rounded=1;fillColor=#01A88D;strokeColor=#007A65;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="570" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- Amazon SES -->
+    <mxCell id="46" value="&lt;b&gt;Amazon SES&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;Threshold alerts + daily summary&lt;br&gt;→ toni7891@gmail.com · sandbox mode&lt;/span&gt;" style="rounded=1;fillColor=#E05243;strokeColor=#B03020;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="695" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- AWS Lambda -->
+    <mxCell id="47" value="&lt;b&gt;AWS Lambda&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;investment-manager-daily-close&lt;br&gt;Python 3.12 · 1M free inv/mo&lt;/span&gt;" style="rounded=1;fillColor=#E07B53;strokeColor=#B35A31;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1010" y="820" width="210" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- EventBridge -->
+    <mxCell id="48" value="&lt;b&gt;EventBridge&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;cron(0 21 ? * MON-FRI *)&lt;br&gt;9pm UTC = 4pm ET · market close&lt;/span&gt;" style="rounded=1;fillColor=#E07B53;strokeColor=#B35A31;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="1270" y="820" width="200" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- ── EXTERNAL SERVICES ───────────────────────────────────── -->
+
+    <!-- MongoDB Atlas -->
+    <mxCell id="50" value="&lt;b&gt;MongoDB Atlas&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;investment_app DB&lt;br&gt;Portfolios · Snapshots · Trades&lt;/span&gt;" style="rounded=1;fillColor=#4DB33D;strokeColor=#3A8A2E;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="210" y="910" width="190" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- yfinance -->
+    <mxCell id="51" value="&lt;b&gt;yfinance API&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;Live prices · Daily close&lt;br&gt;Sector data · External&lt;/span&gt;" style="rounded=1;fillColor=#1ba1e2;strokeColor=#006EAF;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="430" y="910" width="190" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- DuckDuckGo -->
+    <mxCell id="52" value="&lt;b&gt;DuckDuckGo Search&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:8px'&gt;AI chat web search (ddgs)&lt;br&gt;5-min TTL in-memory cache&lt;/span&gt;" style="rounded=1;fillColor=#1ba1e2;strokeColor=#006EAF;fontColor=#ffffff;fontSize=9;verticalAlign=top;spacingTop=6;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="650" y="910" width="200" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- ── EDGES ───────────────────────────────────────────────── -->
+
+    <!-- User → EC2 (HTTPS) -->
+    <mxCell id="100" value="HTTPS / tonyverin.dev" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#0078D4;fontColor=#0078D4;fontSize=8;fontStyle=1;" edge="1" source="10" target="30" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → SSM Parameter Store -->
+    <mxCell id="101" value="startup secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E05243;fontColor=#E05243;fontSize=8;" edge="1" source="30" target="40" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → CloudWatch Logs -->
+    <mxCell id="102" value="watchtower" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E05243;fontColor=#E05243;fontSize=8;" edge="1" source="30" target="41" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- CloudWatch Alarm → SNS -->
+    <mxCell id="103" value="alarm trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E05243;fontColor=#E05243;fontSize=8;" edge="1" source="42" target="43" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → Bedrock -->
+    <mxCell id="104" value="converse() · AI chat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#01A88D;fontColor=#01A88D;fontSize=8;" edge="1" source="30" target="44" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Bedrock → Guardrails -->
+    <mxCell id="105" value="apply filter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#01A88D;fontColor=#01A88D;fontSize=8;" edge="1" source="44" target="45" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → SES -->
+    <mxCell id="106" value="alerts + daily email" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E05243;fontColor=#E05243;fontSize=8;" edge="1" source="30" target="46" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EventBridge → Lambda -->
+    <mxCell id="107" value="cron trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E07B53;fontColor=#E07B53;fontSize=8;" edge="1" source="48" target="47" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Lambda → EC2 -->
+    <mxCell id="108" value="POST /api/internal/daily-close&amp;#xa;X-Internal-Key header" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E07B53;fontColor=#E07B53;fontSize=8;" edge="1" source="47" target="30" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → MongoDB Atlas -->
+    <mxCell id="109" value="pymongo (sync)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#4DB33D;fontColor=#4DB33D;fontSize=8;" edge="1" source="30" target="50" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → yfinance -->
+    <mxCell id="110" value="live prices" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1ba1e2;fontColor=#1ba1e2;fontSize=8;" edge="1" source="30" target="51" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- EC2 → DuckDuckGo -->
+    <mxCell id="111" value="AI search (ddgs)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1ba1e2;fontColor=#1ba1e2;fontSize=8;" edge="1" source="30" target="52" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+  </root>
+</mxGraphModel>
