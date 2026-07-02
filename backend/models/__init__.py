@@ -1,1 +1,1 @@
-from .model import PortfolioSummary
+from .model import PortfolioSummary as PortfolioSummary

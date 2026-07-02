@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Investment Terminal (4RCH3R)** — a full-stack portfolio tracking app with AI-powered investment insights.
 
-Stack: Python FastAPI backend + MongoDB (Atlas, synchronous pymongo) + Vanilla JS frontend + yfinance (live prices) + LM Studio/Ollama (AI chat) + DuckDuckGo (web search).
+Stack: Python FastAPI backend + MongoDB (Atlas, synchronous pymongo) + Vanilla JS frontend + yfinance (live prices) + AWS Bedrock/Groq/LM Studio/Ollama (AI chat) + DuckDuckGo (web search) + JWT auth.
 
 ## Commands
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (app + test deps)
+pip install -r requirements.txt -r requirements-test.txt
 
 # Run the app (serves on http://0.0.0.0:8000)
 python backend/main.py
@@ -33,20 +33,23 @@ python run_tests.py --xvs
 pytest tests/smoke/test_smoke.py -v
 ```
 
-No build step — pure Python + static JS. No lint config present.
+No build step — pure Python + static JS. Lint via `ruff check backend/ tests/` (config in `pyproject.toml`).
 
 ## Architecture
 
 ```
-backend/main.py              FastAPI app, uvicorn entry point, CORS, startup/shutdown, /status, /dashboard routes
-  ├── backend/routes.py      All API endpoints (portfolio CRUD, positions, cash, snapshots, market data, AI chat)
+backend/main.py              FastAPI app, uvicorn entry point, CORS, startup/shutdown, /status, /, /app, /dashboard, /login routes
+  ├── backend/routes.py      All API endpoints (auth, portfolio CRUD, positions, cash, snapshots, market data, AI chat)
+  ├── backend/auth.py        JWT issuing/verification, password hashing, RBAC dependencies (get_current_user, get_current_admin)
   ├── backend/database.py    Synchronous pymongo client; exports `db` (None if connection fails — routes check for this)
   ├── backend/search.py      DuckDuckGo search via ddgs (5-min TTL in-memory cache)
   └── backend/models/model.py  Legacy Pydantic models + portfolio helpers (mostly unused by routes.py)
 
 app.py                       Alternate FastAPI entry (no uvicorn runner; use for uvicorn app:app style)
 
-frontend/public/index.html       Landing page — portfolio list + Excel upload
+frontend/public/landing.html     Served at `/` — marketing/landing page
+frontend/public/index.html       Served at `/app` — portfolio list + Excel upload
+frontend/public/login.html       Served at `/login` — auth screen
 frontend/public/dashboard.html   Dashboard — portfolio detail, positions, chart, AI chat
 frontend/public/static/style.css Dark-theme IBM Plex styling
 frontend/public/static/app.js    Main JS entry point — wires DOM events, imports all modules
@@ -63,8 +66,10 @@ frontend/public/static/modules/
 ```
 
 The FastAPI app (backend/main.py) serves `frontend/public/` statically:
-- `/` → `index.html`
+- `/` → `landing.html`
+- `/app` → `index.html`
 - `/dashboard` → `dashboard.html`
+- `/login` → `login.html`
 - `/static/*` → `frontend/public/static/`
 
 ## Database
@@ -105,17 +110,28 @@ Cash is stored as `{ "ticker": "CASH", "shares": <amount>, "average_cost": 1.0 }
 
 **Heartrate chart modes:** The chart has a VALUE / P&L toggle (`state.chartMode`). In P&L mode, each data point is rendered as `value − period_start_value`, so the chart shows cumulative gain/loss from the beginning of the selected period. The benchmark overlay also shifts to P&L terms in this mode.
 
-**AI chat (`POST /api/chat`):** Assembles portfolio summary + DuckDuckGo search results (always searched unless `use_web_search: false`) into a prompt, then calls the local LLM synchronously (non-streaming, 300 s timeout). `should_trigger_search()` is no longer the gating check — search always runs when `use_web_search` is true.
+**AI chat (`POST /api/chat`):** Assembles portfolio summary + DuckDuckGo search results (always searched unless `use_web_search: false`) into a prompt, then calls the configured LLM synchronously (300 s timeout, 10 req/min per-user rate limit). `should_trigger_search()` is no longer the gating check — search always runs when `use_web_search` is true.
 
-**LLM backend:** Controlled by `LLM_BACKEND` env var (`lmstudio` or `ollama`). Both use an OpenAI-compatible `/v1/chat/completions` endpoint. LM Studio uses model `"*"` (any loaded model).
+**LLM backend:** Controlled by `LLM_BACKEND` env var (`bedrock` | `groq` | `lmstudio` | `ollama`). Default is `bedrock` — uses boto3 `bedrock-runtime.converse()` (system prompt in the dedicated `system` param, optional Guardrails via `BEDROCK_GUARDRAIL_ID`), dispatched via `run_in_executor` since boto3 is synchronous. The other three backends share an OpenAI-compatible `/v1/chat/completions` HTTP path; both response shapes are normalized to `{ choices: [{ message: { content } }] }` before returning.
+
+**Auth:** JWT (`python-jose`, HS256, 24h expiry) issued by `POST /api/auth/login`. `token_version` on the user document is embedded as `tv` in the JWT; incrementing it (on password/username change) invalidates all outstanding tokens with no blocklist. `get_current_user` enforces `force_password_change`; `get_current_admin` requires `role == "admin"`. `check_portfolio_access()` gates non-admin users to portfolios they own via `portfolio_metadata`. An admin account is auto-seeded on first startup with a random password (printed to stdout once).
 
 **Market data caches:** Ticker tape (`GET /api/market/ticker-tape`) refreshes every 5 min. Fear & Greed index (`GET /api/market/fear-greed`) refreshes every 1 hour. Both use in-process dicts.
 
 ## API Endpoints
 
+All `/api/portfolios/*`, `/api/chat`, and `/api/admin/*` routes require `Authorization: Bearer <JWT>` (`Depends(get_current_user)` or `get_current_admin`).
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/portfolios/list` | List portfolio names (excludes `_history` and `_trades` collections) |
+| POST | `/api/auth/signup` | Create a user account |
+| POST | `/api/auth/login` | Exchange username/password for a JWT |
+| GET | `/api/auth/me` | Current user info |
+| PATCH | `/api/auth/change-password` | Change password (also usable while `force_password_change` is set) |
+| PATCH | `/api/auth/change-username` | Change username (increments `token_version`) |
+| GET | `/api/admin/portfolios` | Admin-only: list all portfolios across all users |
+| POST | `/api/internal/daily-close` | Internal (X-Internal-Key header): snapshots all portfolios + sends EOD email, called by the scheduled Lambda |
+| GET | `/api/portfolios/list` | List portfolio names (admin sees all; regular users see only their own, via `portfolio_metadata`) |
 | GET | `/api/portfolios/{id}` | Portfolio with live prices, P&L, daily change |
 | POST | `/api/portfolios/upload` | Upload Excel file to create/replace a portfolio |
 | DELETE | `/api/portfolios/{id}` | Drop portfolio and all companion collections |
@@ -143,16 +159,49 @@ Cash is stored as `{ "ticker": "CASH", "shares": <amount>, "average_cost": 1.0 }
 
 ```env
 MONGO_URI=<mongodb+srv://...>
+JWT_SECRET_KEY=<generate: python -c "import secrets; print(secrets.token_hex(32))">   # required — process raises on missing
+
+LLM_BACKEND=bedrock           # or "groq" | "lmstudio" | "ollama"
+BEDROCK_MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_REGION=us-east-1
+BEDROCK_GUARDRAIL_ID=          # optional
+BEDROCK_GUARDRAIL_VERSION=DRAFT
+GROQ_API_KEY=                  # only when LLM_BACKEND=groq
 LM_STUDIO_API_URL=http://localhost:1234/v1/chat/completions
-LLM_BACKEND=lmstudio          # or "ollama"
 OLLAMA_API_URL=http://localhost:11434/v1/chat/completions
 OLLAMA_MODEL=llama3
-SSL_VERIFY=true               # set to "false" to skip TLS verification for local LLM
+SSL_VERIFY=true                # set to "false" to skip TLS verification for local LLM
+
+CORS_ORIGINS=                  # comma-separated; blank = localhost only
+CLOUDWATCH_LOG_GROUP=          # optional — enables watchtower log shipping
+ALERT_ENABLED=false
+ALERT_EMAIL=
+ALERT_THRESHOLD_PCT=5.0
+INTERNAL_API_KEY=              # shared secret for POST /api/internal/daily-close
 ```
+
+In production (EC2), none of this lives in a `.env` file — `backend/main.py:_load_ssm_secrets()` pulls every `/investment-manager/*` SSM parameter into `os.environ` at startup (see `infra/ssm.tf`).
 
 ## Tests
 
-All tests live in `tests/smoke/test_smoke.py`. They mock MongoDB via `mongomock` and patch `backend.database.db` before importing the app. `run_tests.py` is a thin pytest wrapper. The test helper `get_test_client()` must patch both `backend.routes.db` and `routes.db` (the module may be imported under either name depending on sys.path).
+All tests live in `tests/smoke/test_smoke.py` (28 tests). They mock MongoDB via `mongomock` and patch `backend.database.db` before importing the app. `run_tests.py` is a thin pytest wrapper.
+
+`get_test_client()` pre-authenticates as a seeded admin user and returns a `TestClient` with `Authorization` already set — every route now requires a JWT, so tests never call the app unauthenticated. When patching the mocked db onto already-imported modules, patch **all three** module references, not just `routes`/`backend.routes`:
+- `backend.database.db`
+- `routes.db` / `backend.routes.db`
+- `auth.db` / `backend.auth.db` — `auth.py` does `from .database import db`, which binds its own module-level name at first import; reassigning `backend.database.db` later does *not* propagate there, so it must be patched explicitly or every auth-gated request 401s against a stale db from an earlier test.
+
+Chat tests mock `boto3.client` (not `httpx.AsyncClient`) since the default `LLM_BACKEND=bedrock` path calls `boto3.client("bedrock-runtime").converse()` synchronously inside `run_in_executor`, not an HTTP client.
+
+## Deployment
+
+Canonical deploy target is a bare-metal EC2 instance provisioned by Terraform (`infra/`) — `infra/templates/userdata.sh.tpl` installs Python 3.11 + nginx directly on Amazon Linux and runs the app via systemd (`investment-manager.service`), *not* Docker/ECR. `.github/workflows/cd.yml` (fires only on `v*` tags) applies Terraform, then uses SSM Run Command to `git pull` + restart the systemd service on the already-running instance, since userdata only executes once at first boot.
+
+`Dockerfile` / `docker-compose.yml` / `docker/` are a separate, optional path for running the app in a container locally (or on any other host) — they are not what EC2 runs. Keep both working, but don't assume container semantics (e.g. `docker/supervisord.conf`) apply to the EC2 deploy.
+
+`.github/workflows/ci.yml` runs lint (`ruff`) + the smoke suite + a Docker build-and-boot smoke check on every push/PR to `main`.
+
+See `PROJECT_SUMMARY.md` for the current honest deployment status (what's provisioned vs. still needs `terraform apply`).
 
 ## graphify
 

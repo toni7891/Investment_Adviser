@@ -1,5 +1,5 @@
 # Ref: [[routes.py]] [[database.py]] [[search.py]] [[PROJECT_MAP.md]]
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -70,10 +70,10 @@ def _seed_admin():
             "created_at":            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         })
         print(f"\n{'='*60}")
-        print(f"  Admin account created.")
-        print(f"  Username: admin")
+        print("  Admin account created.")
+        print("  Username: admin")
         print(f"  Password: {initial_password}")
-        print(f"  Change this password on first login.")
+        print("  Change this password on first login.")
         print(f"{'='*60}\n")
     except Exception as e:
         logger.error("Admin seed failed: %s", e)

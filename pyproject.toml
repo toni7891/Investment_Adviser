@@ -1,0 +1,6 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# E402: sys.path setup in tests/smoke/test_smoke.py must precede the import
+ignore = ["E402"]

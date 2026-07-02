@@ -8,29 +8,29 @@ cr = certifi.where()
 load_dotenv()
 
 mongo_connection_string = os.getenv("MONGO_URI")
-if not mongo_connection_string:
-    raise ValueError("MONGO_URI is not set in the environment variables.")
 
 client = None
 db = None
 
-try:
-    # Initialize MongoClient with the URI
-    client = MongoClient(
-        mongo_connection_string,
-        tlsCAFile=cr,
-        serverSelectionTimeoutMS=10000  # Increased timeout
-    )
-
-    # Test the connection
-    client.admin.command('ismaster')
-    print("[OK] MongoDB connection established")
-except errors.OperationFailure as e:
-    print(f"[WARN] MongoDB authentication failed: {e}")
-    print("   Continuing without database — some features will be disabled")
-except Exception as e:
-    print(f"[WARN] MongoDB connection failed: {e}")
-    print("   Continuing without database — some features will be disabled")
+if not mongo_connection_string:
+    print("[WARN] MONGO_URI is not set — continuing without database. Some features will be disabled.")
+else:
+    try:
+        client = MongoClient(
+            mongo_connection_string,
+            tlsCAFile=cr,
+            serverSelectionTimeoutMS=10000
+        )
+        client.admin.command('ismaster')
+        print("[OK] MongoDB connection established")
+    except errors.OperationFailure as e:
+        print(f"[WARN] MongoDB authentication failed: {e}")
+        print("   Continuing without database — some features will be disabled")
+        client = None
+    except Exception as e:
+        print(f"[WARN] MongoDB connection failed: {e}")
+        print("   Continuing without database — some features will be disabled")
+        client = None
 
 if client is not None:
     db = client['investment_app']
@@ -56,7 +56,3 @@ def list_collections():
     if db is None:
         return []
     return [name for name in db.list_collection_names() if not name.startswith('system.')]
-
-
-
-

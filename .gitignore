@@ -47,3 +47,15 @@ landing-v3.png
 
 # Presentation files
 aws-bedrock-presentation.html
+
+# Terraform
+infra/.terraform/
+infra/**/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/**/*.tfstate
+infra/**/*.tfstate.backup
+infra/backend.hcl
+infra/**/.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example

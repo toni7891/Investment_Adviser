@@ -18,7 +18,6 @@ graphify-out/
 *.pdf
 *.drawio
 *.txt.bak
-docker/
 Dockerfile
 cloudformation.yaml
 DEPLOYMENT_PLAN.md

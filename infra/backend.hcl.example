@@ -1,0 +1,12 @@
+# Copy this file to backend.hcl (it is gitignored) and fill in the values
+# printed by `terraform apply` in infra/bootstrap/.
+#
+# Then initialise the main infra with:
+#   cd infra
+#   terraform init -backend-config=backend.hcl
+
+bucket         = "investment-manager-tfstate-REPLACE_WITH_ACCOUNT_ID"
+key            = "investment-manager/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "investment-manager-tfstate-lock"
+encrypt        = true

@@ -20,6 +20,3 @@ openpyxl>=3.1.5
 # FastAPI testing (also in main requirements)
 fastapi>=0.136.0
 uvicorn>=0.46.0
-
-# Mocking
-unittest.mock>=3.0.0; python_version >= "3.3"

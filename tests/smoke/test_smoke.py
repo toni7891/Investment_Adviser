@@ -21,7 +21,6 @@ def get_test_client():
     import sys
     import mongomock
     from unittest.mock import MagicMock
-    from fastapi.testclient import TestClient
 
     # Create a fresh in-memory DB for this test
     mock_db = mongomock.MongoClient().investment_app
@@ -46,7 +45,32 @@ def get_test_client():
     except ImportError:
         pass
 
+    # auth.py does `from .database import db`, binding its own module-level
+    # `db` name at first import — later reassignments of backend.database.db
+    # don't propagate there automatically, so patch it explicitly too.
+    if 'auth' in sys.modules:
+        sys.modules['auth'].db = mock_db
+    try:
+        import backend.auth
+        backend.auth.db = mock_db
+    except ImportError:
+        pass
+
+    # Seed an admin user (bypasses per-portfolio ownership checks, since these
+    # smoke tests create portfolios by inserting directly into mock_db rather
+    # than going through portfolio_metadata) and pre-authenticate the client.
+    from backend.auth import create_access_token
+    mock_db["users"].insert_one({
+        "username": "smoke_admin",
+        "password_hash": "unused",
+        "role": "admin",
+        "force_password_change": False,
+        "token_version": 0,
+    })
+    token = create_access_token({"sub": "smoke_admin", "role": "admin", "tv": 0})
+
     client = TestClient(app)
+    client.headers["Authorization"] = f"Bearer {token}"
     return client, mock_db
 
 
@@ -148,28 +172,25 @@ def test_withdraw_cash():
     assert data["new_cash"] == 700.0
 
 
+def _mock_bedrock(reply_text):
+    """Build a MagicMock standing in for boto3.client('bedrock-runtime')."""
+    from unittest.mock import MagicMock
+    bedrock_client = MagicMock()
+    bedrock_client.converse.return_value = {
+        "stopReason": "end_turn",
+        "output": {"message": {"content": [{"text": reply_text}]}},
+    }
+    return bedrock_client
+
+
 def test_chat_without_portfolio():
     """POST /api/chat works without portfolio_id."""
-    from unittest.mock import patch, AsyncMock, MagicMock
+    from unittest.mock import patch
 
     client, mock_db = get_test_client()
 
-    # Mock AI backend
-    with patch('httpx.AsyncClient') as mock_client_class:
-        mock_instance = MagicMock()
-        async def mock_post(url, json=None, headers=None, timeout=None):
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.headers = {'content-type': 'application/json'}
-            resp.json = MagicMock(return_value={
-                "choices": [{"message": {"role": "assistant", "content": "Hello"}}]
-            })
-            return resp
-        mock_instance.post = AsyncMock(side_effect=mock_post)
-        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_instance.__aexit__ = AsyncMock(return_value=None)
-        mock_client_class.return_value = mock_instance
-
+    # call_ai_backend's bedrock branch calls boto3.client("bedrock-runtime").converse(...)
+    with patch("boto3.client", return_value=_mock_bedrock("Hello")):
         response = client.post("/api/chat", json={"message": "Hello", "use_web_search": False})
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
@@ -180,7 +201,7 @@ def test_chat_without_portfolio():
 
 def test_chat_with_portfolio():
     """POST /api/chat with portfolio_id includes context."""
-    from unittest.mock import patch, AsyncMock, MagicMock
+    from unittest.mock import patch
 
     client, mock_db = get_test_client()
     port_id = "SMOKE_CHAT"
@@ -189,36 +210,20 @@ def test_chat_with_portfolio():
     mock_db[port_id].insert_one({"ticker": "CASH", "shares": 5000.0, "average_cost": 1.0})
     mock_db[port_id].insert_one({"ticker": "AAPL", "shares": 5, "average_cost": 170.0})
 
-    # Mock AI backend
-    with patch('httpx.AsyncClient') as mock_client_class:
-        mock_instance = MagicMock()
-        async def mock_post(url, json=None, headers=None, timeout=None):
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.headers = {'content-type': 'application/json'}
-            resp.json = MagicMock(return_value={
-                "choices": [{"message": {"role": "assistant", "content": "You own AAPL"}}]
-            })
-            return resp
-        mock_instance.post = AsyncMock(side_effect=mock_post)
-        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_instance.__aexit__ = AsyncMock(return_value=None)
-        mock_client_class.return_value = mock_instance
-
+    with patch("boto3.client", return_value=_mock_bedrock("You own AAPL")):
         response = client.post("/api/chat", json={
             "message": "What do I own?",
             "portfolio_id": port_id,
             "use_web_search": False
         })
 
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
     data = response.json()
     assert data.get("portfolio_context_included") is True
 
 
 def test_get_portfolio_calculates_metrics():
     """GET /api/portfolios/{id} returns complete metrics."""
-    import yfinance as yf
     from unittest.mock import patch
 
     client, mock_db = get_test_client()
@@ -230,7 +235,7 @@ def test_get_portfolio_calculates_metrics():
 
     # Mock yfinance to return valid prices
     import pandas as pd
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     dates = pd.date_range(start=datetime(2026, 4, 24), periods=2, freq='D')
 
