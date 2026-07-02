@@ -9,7 +9,7 @@
 ## 1. Project Name
 
 **4RCH3R Investment Terminal**
-Repository: `investment_manager` · GitHub: `github.com/toni7891/investment_manager`
+Repository: `Investment_Adviser` · GitHub: `github.com/toni7891/Investment_Adviser`
 
 ---
 

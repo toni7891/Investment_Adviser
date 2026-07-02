@@ -6,7 +6,7 @@
 
 ### A full-stack, AI-powered portfolio tracker with live prices, sector analysis, and an on-device or cloud LLM strategist
 
-![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Bedrock%20%7C%20SES%20%7C%20CloudWatch-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)
@@ -34,12 +34,12 @@
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| Language | Python 3.9+ | Async-first with `asyncio` |
+| Language | Python 3.11+ | Async-first with `asyncio` |
 | Framework | FastAPI | Pydantic v2 request models |
 | ASGI Server | Uvicorn | Serves static frontend too |
 | Database | MongoDB (pymongo) | Atlas or local; sync driver |
 | Market Data | yfinance | Bulk download + 1-hr validation cache |
-| AI Backend | LM Studio / Ollama / AWS Bedrock / Groq | Selectable via `LLM_BACKEND` env var |
+| AI Backend | AWS Bedrock (default) / Groq / LM Studio / Ollama | Selectable via `LLM_BACKEND` env var |
 | Content Safety | AWS Bedrock Guardrails | Optional; blocks off-topic / harmful AI responses |
 | Web Search | DuckDuckGo (ddgs) | 5-min TTL in-process cache |
 | Authentication | JWT (python-jose + passlib/bcrypt) | Role-based: `user` / `admin` |
@@ -56,7 +56,7 @@
 - **Live Price Tracking** — Bulk-fetches all portfolio tickers via `yfinance` on every load; gracefully falls back to average cost for delisted or unavailable symbols.
 - **Multi-Portfolio Management** — Each portfolio lives in its own MongoDB collection; create, rename, or delete portfolios without touching others.
 - **User Authentication** — JWT-based signup/login with bcrypt password hashing, role-based access control (`user` / `admin`), forced password reset flow, and token versioning to invalidate sessions on credential change.
-- **AI Strategist Chat** — Portfolio-aware Q&A via your choice of LM Studio, Ollama, AWS Bedrock (Claude 3.5 Haiku by default), or Groq — plus optional DuckDuckGo web search for live context, all without sending your data to an uncontrolled third party.
+- **AI Strategist Chat** — Portfolio-aware Q&A via your choice of AWS Bedrock (Claude Haiku 4.5 by default), Groq, LM Studio, or Ollama — plus optional DuckDuckGo web search for live context, all without sending your data to an uncontrolled third party.
 - **AWS Bedrock Guardrails** — Optionally attach a Bedrock Guardrail to the AI chat endpoint to block off-topic, harmful, or sensitive responses before they reach the user.
 - **Portfolio Alerts via SES** — Receive an email when any portfolio's daily change exceeds a configurable threshold (`ALERT_THRESHOLD_PCT`). A daily end-of-day summary email is also dispatched by the Lambda cron endpoint.
 - **CloudWatch Logging** — All server-side events are shipped to AWS CloudWatch via `watchtower` for centralized observability.
@@ -74,7 +74,7 @@
 
 ### Prerequisites
 
-- [Python 3.9+](https://www.python.org/downloads/)
+- [Python 3.11+](https://www.python.org/downloads/) (code uses `X | None` syntax — 3.10+ required at minimum)
 - [MongoDB Atlas](https://www.mongodb.com/atlas) account (or a local `mongod` instance)
 - *(Optional)* [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.ai/) for local AI chat
 - *(Optional)* AWS account with Bedrock, SES, and CloudWatch access for cloud deployment features
@@ -84,8 +84,8 @@
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/toni7891/investment_manager.git
-cd investment_manager
+git clone https://github.com/toni7891/Investment_Adviser.git
+cd Investment_Adviser
 ```
 
 2. **Create and activate a virtual environment**
@@ -115,7 +115,7 @@ Create a `.env` file in the project root:
 MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 
 # ── Authentication ────────────────────────────────────────────────────────────
-JWT_SECRET=<long-random-secret>          # used to sign JWT tokens
+JWT_SECRET_KEY=<long-random-secret>      # used to sign JWT tokens; process raises on startup if unset
 
 # ── AI backend — pick one ─────────────────────────────────────────────────────
 LLM_BACKEND=lmstudio                     # lmstudio | ollama | bedrock | groq
@@ -126,7 +126,7 @@ LM_STUDIO_API_URL=http://localhost:1234/v1/chat/completions
 # OLLAMA_MODEL=llama3
 
 # LLM_BACKEND=bedrock
-# BEDROCK_MODEL=anthropic.claude-3-5-haiku-20241022-v1:0
+# BEDROCK_MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
 # BEDROCK_REGION=us-east-1
 # BEDROCK_GUARDRAIL_ID=<guardrail-id>       # optional
 # BEDROCK_GUARDRAIL_VERSION=DRAFT           # optional
@@ -349,7 +349,7 @@ curl -X POST http://localhost:8000/api/chat \
 ```json
 {
   "response": "Based on your holdings, 72% of your portfolio is in technology...",
-  "model": "anthropic.claude-3-5-haiku-20241022-v1:0",
+  "model": "anthropic.claude-haiku-4-5-20251001-v1:0",
   "backend": "AWS Bedrock",
   "portfolio_context_included": true,
   "web_search_used": true
@@ -394,8 +394,9 @@ All errors follow a consistent shape:
 │       └── 📄 model.py     # Legacy Pydantic models & portfolio helpers
 ├── 📁 frontend/
 │   └── 📁 public/
-│       ├── 📄 index.html       # Landing / marketing page
-│       ├── 📄 login.html       # Login / signup page
+│       ├── 📄 landing.html     # Served at `/` — marketing page
+│       ├── 📄 index.html       # Served at `/app` — portfolio list + Excel upload
+│       ├── 📄 login.html       # Served at `/login`
 │       ├── 📄 dashboard.html   # Dashboard — positions, charts, AI chat
 │       └── 📁 static/
 │           ├── 📄 app.js        # ES module entry point (page detection & wiring)
@@ -412,11 +413,17 @@ All errors follow a consistent shape:
 ├── 📁 tests/
 │   └── 📁 smoke/
 │       └── 📄 test_smoke.py  # Smoke tests (mongomock — no real DB needed)
+├── 📁 infra/             # Terraform: VPC, EC2, IAM, SSM, Lambda, CloudWatch, SNS
+├── 📁 .github/workflows/ # ci.yml (lint+test+docker), cd.yml (deploy on v* tags)
+├── 📄 Dockerfile, docker-compose.yml, docker/  # Optional local container path
 ├── 📄 app.py            # Alternate FastAPI entry (uvicorn app:app style)
 ├── 📄 run_tests.py      # Thin pytest wrapper with convenience flags
 ├── 📄 requirements.txt  # Python dependencies
 └── 📄 .env              # Environment variables (never committed)
 ```
+
+See [`PROJECT_SUMMARY.md`](PROJECT_SUMMARY.md) for the current, honest deployment
+status — what's provisioned vs. what still needs `terraform apply`.
 
 ### Request Flow
 
@@ -465,7 +472,7 @@ Browser
 - **Naming** — `snake_case` for all Python identifiers; `camelCase` for JavaScript; `SCREAMING_SNAKE` for module-level constants.
 - **Function scope** — Each function should do one thing. Route handlers orchestrate; helpers execute. Keep handlers under ~50 lines; extract logic into named helpers.
 - **Error handling** — Use `HTTPException` with a string `detail` at API boundaries. Never expose raw exception messages from internal libraries directly to the client.
-- **Type hints** — All Python function signatures must include parameter and return type hints. Use `Optional[X]` over `X | None` for Python 3.9 compatibility.
+- **Type hints** — All Python function signatures must include parameter and return type hints. `X | None` (PEP 604) is used throughout — requires Python 3.10+.
 - **No raw `dict` request bodies** — Use Pydantic `BaseModel` subclasses for every `POST`/`PUT` endpoint; keep custom validation logic in the route handler (not as `Field` validators) to preserve string `detail` error messages.
 - **Caching pattern** — Module-level `dict` cache with `{"data": None, "ts": 0.0}` shape and a TTL constant. Always check `now - cache["ts"] < TTL` before fetching.
 - **Auth** — All portfolio endpoints require `Depends(get_current_user)`. Admin-only endpoints use `Depends(get_current_admin)`. Never bypass ownership checks via `check_portfolio_access()`.
